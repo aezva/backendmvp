@@ -1,4 +1,7 @@
 export function buildPrompt({ businessData, message, source, availability }: { businessData: any, message: string, source: string, availability?: any }) {
+  // Obtener la fecha actual en formato largo en español
+  const fechaActual = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
   // Determinar el rol de NNIA según el canal/source
   let rol = '';
   if (source === 'client-panel') {
@@ -47,7 +50,7 @@ export function buildPrompt({ businessData, message, source, availability }: { b
   return [
     {
       role: 'user',
-      content: `Información del negocio: ${JSON.stringify(businessContext)}. Configuración de citas: ${JSON.stringify(citaContext)}. Canal: ${source}. ${rol}\n${citaInstruccion}\n\nMensaje del usuario: ${message}`,
+      content: `Hoy es ${fechaActual}. Información del negocio: ${JSON.stringify(businessContext)}. Configuración de citas: ${JSON.stringify(citaContext)}. Canal: ${source}. ${rol}\n${citaInstruccion}\n\nMensaje del usuario: ${message}`,
     },
   ];
 } 
