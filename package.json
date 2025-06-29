@@ -1,0 +1,39 @@
+{
+  "name": "nnia-backend",
+  "version": "1.0.0",
+  "description": "Backend para NNIA con integración de Stripe",
+  "main": "server.js",
+  "scripts": {
+    "dev": "ts-node src/server.ts",
+    "prebuild": "chmod +x ./node_modules/.bin/tsc",
+    "build": "tsc",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.50.2",
+    "body-parser": "^1.20.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^4.21.2",
+    "morgan": "^1.10.0",
+    "openai": "^5.7.0",
+    "stripe": "^14.7.0",
+    "typescript": "^5.8.3"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.3",
+    "@types/morgan": "^1.9.10",
+    "@types/node": "^24.0.4",
+    "nodemon": "^3.0.1",
+    "ts-node": "^10.9.2"
+  },
+  "keywords": [
+    "stripe",
+    "supabase",
+    "saas",
+    "ai"
+  ],
+  "author": "NNIA Team",
+  "license": "MIT"
+}
