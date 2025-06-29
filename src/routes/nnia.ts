@@ -366,7 +366,8 @@ router.get('/widget/config/:businessId', async (req: Request, res: Response) => 
 
     if (error && error.code !== 'PGRST116') {
       console.error('Error al obtener configuración del widget:', error);
-      return res.status(500).json({ error: 'Error interno del servidor' });
+      res.status(500).json({ error: 'Error interno del servidor' });
+      return;
     }
 
     // Si no existe configuración, devolver valores por defecto
@@ -394,7 +395,8 @@ router.get('/widget/config/:businessId', async (req: Request, res: Response) => 
         offlineMessage: 'Estamos fuera de horario. Te responderemos pronto.'
       };
       
-      return res.json(defaultConfig);
+      res.json(defaultConfig);
+      return;
     }
 
     res.json(data.config);
@@ -417,7 +419,8 @@ router.put('/widget/config/:businessId', async (req: Request, res: Response) => 
       .single();
 
     if (businessError || !business) {
-      return res.status(404).json({ error: 'Negocio no encontrado' });
+      res.status(404).json({ error: 'Negocio no encontrado' });
+      return;
     }
 
     // Upsert configuración del widget
@@ -435,7 +438,8 @@ router.put('/widget/config/:businessId', async (req: Request, res: Response) => 
 
     if (error) {
       console.error('Error al guardar configuración del widget:', error);
-      return res.status(500).json({ error: 'Error interno del servidor' });
+      res.status(500).json({ error: 'Error interno del servidor' });
+      return;
     }
 
     res.json({ success: true, data });
