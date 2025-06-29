@@ -69,9 +69,28 @@ export function buildPrompt({ businessData, message, source, availability, pendi
   // Instrucción especial para agendar citas y reservas
   const instruccionCitas = `Si en la conversación tienes todos los datos para agendar una CITA (nombre, email, tipo, día y hora), responde SOLO con la frase: CREAR_CITA: seguido de los datos en formato JSON, por ejemplo: CREAR_CITA: {"name":"Juan Pérez","email":"juan@email.com","type":"phone","date":"2024-06-20","time":"10:00","origin":"web"}. IMPORTANTE: Evita agendar citas en horarios ya ocupados.`;
 
-  const instruccionReservas = `Si en la conversación tienes todos los datos para hacer una RESERVA (nombre, email, tipo de reserva, día, hora, número de personas), responde SOLO con la frase: CREAR_RESERVA: seguido de los datos en formato JSON, por ejemplo: CREAR_RESERVA: {"name":"María García","email":"maria@email.com","reservation_type":"Mesa para 4","date":"2024-06-20","time":"19:00","people_count":4,"origin":"web"}. IMPORTANTE: Evita hacer reservas en horarios ya ocupados.`;
+  const instruccionReservas = `Para RESERVAS, sigue este proceso conversacional:
 
-  const instruccionGeneral = `${instruccionCitas}\n${instruccionReservas}\n\nDISTINGUE ENTRE CITAS Y RESERVAS: Las citas son para servicios profesionales (consultas, tratamientos, etc.). Las reservas son para espacios o mesas (restaurantes, hoteles, etc.). Si alguien pregunta por disponibilidad, sugiere opciones pero siempre permite que el usuario elija.`;
+1. Si alguien menciona querer hacer una reserva, responde de forma amable y pregunta:
+   - "¡Perfecto! Me encantaría ayudarte con tu reserva. ¿Para cuántas personas será?"
+   - "¿En qué nombre quieres hacer la reserva?"
+   - "¿Tienes alguna preferencia de día y hora?"
+
+2. Si el usuario no especifica día/hora, muéstrale la disponibilidad disponible:
+   - "Tenemos disponibilidad los días: [mostrar días disponibles]"
+   - "Nuestros horarios son: [mostrar horarios]"
+   - "¿Qué día te vendría mejor?"
+
+3. Una vez que tengas TODOS los datos (nombre, número de personas, día, hora), responde SOLO con: CREAR_RESERVA: seguido de los datos en formato JSON, por ejemplo: CREAR_RESERVA: {"name":"María García","email":"maria@email.com","reservation_type":"Mesa para 4","date":"2024-06-20","time":"19:00","people_count":4,"origin":"web"}.
+
+4. IMPORTANTE: 
+   - Evita hacer reservas en horarios ya ocupados
+   - SIEMPRE pregunta el nombre y número de personas antes de proceder
+   - Sé conversacional y amable, no solo técnico
+   - Si no tienes todos los datos necesarios, sigue preguntando hasta tenerlos completos
+   - Sugiere opciones de disponibilidad cuando sea apropiado`;
+
+  const instruccionGeneral = `${instruccionCitas}\n${instruccionReservas}\n\nDISTINGUE ENTRE CITAS Y RESERVAS: Las citas son para servicios profesionales (consultas, tratamientos, etc.). Las reservas son para espacios o mesas (restaurantes, hoteles, etc.). Para reservas, SIEMPRE pregunta el nombre y número de personas antes de proceder. Si alguien pregunta por disponibilidad, sugiere opciones pero siempre permite que el usuario elija.`;
 
   // Solo retornar el mensaje del usuario, el contexto debe estar en la configuración del Assistant
   return [
