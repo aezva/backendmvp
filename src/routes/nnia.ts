@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { buildPrompt } from '../utils/promptBuilder';
 import { askNNIAWithModel } from '../services/openai';
-import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, getReservations, createReservation, getReservationAvailabilityAndTypes, getReservationTypes, createReservationType, updateReservationType, deleteReservationType, getReservationAvailability, setReservationAvailability, updateReservation, deleteReservation } from '../services/supabase';
+import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, getReservations, createReservation, getReservationAvailabilityAndTypes, getReservationTypes, createReservationType, updateReservationType, deleteReservationType, getReservationAvailability, setReservationAvailability, updateReservation, deleteReservation, supabase } from '../services/supabase';
 
 const router = Router();
 
@@ -349,6 +349,99 @@ router.post('/reservation-availability', async (req: Request, res: Response) => 
     res.json({ success: true, availability: data });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoints para configuración del widget
+router.get('/widget/config/:businessId', async (req: Request, res: Response) => {
+  try {
+    const { businessId } = req.params;
+    
+    // Obtener configuración del widget desde Supabase
+    const { data, error } = await supabase
+      .from('widget_configs')
+      .select('*')
+      .eq('business_id', businessId)
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error al obtener configuración del widget:', error);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+
+    // Si no existe configuración, devolver valores por defecto
+    if (!data) {
+      const defaultConfig = {
+        position: 'bottom-right',
+        primaryColor: '#3b82f6',
+        backgroundColor: '#ffffff',
+        textColor: '#1f2937',
+        welcomeMessage: '¡Hola! Soy NNIA, tu asistente virtual. ¿En qué puedo ayudarte?',
+        autoOpen: false,
+        showTimestamp: true,
+        maxMessages: 50,
+        scheduleEnabled: false,
+        timezone: 'America/Mexico_City',
+        hours: {
+          monday: { start: '09:00', end: '18:00', enabled: true },
+          tuesday: { start: '09:00', end: '18:00', enabled: true },
+          wednesday: { start: '09:00', end: '18:00', enabled: true },
+          thursday: { start: '09:00', end: '18:00', enabled: true },
+          friday: { start: '09:00', end: '18:00', enabled: true },
+          saturday: { start: '10:00', end: '16:00', enabled: false },
+          sunday: { start: '10:00', end: '16:00', enabled: false }
+        },
+        offlineMessage: 'Estamos fuera de horario. Te responderemos pronto.'
+      };
+      
+      return res.json(defaultConfig);
+    }
+
+    res.json(data.config);
+  } catch (error) {
+    console.error('Error en GET /widget/config/:businessId:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
+  }
+});
+
+router.put('/widget/config/:businessId', async (req: Request, res: Response) => {
+  try {
+    const { businessId } = req.params;
+    const config = req.body;
+    
+    // Validar que el businessId existe
+    const { data: business, error: businessError } = await supabase
+      .from('clients')
+      .select('id')
+      .eq('id', businessId)
+      .single();
+
+    if (businessError || !business) {
+      return res.status(404).json({ error: 'Negocio no encontrado' });
+    }
+
+    // Upsert configuración del widget
+    const { data, error } = await supabase
+      .from('widget_configs')
+      .upsert({
+        business_id: businessId,
+        config: config,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'business_id'
+      })
+      .select()
+      .single();
+
+    if (error) {
+      console.error('Error al guardar configuración del widget:', error);
+      return res.status(500).json({ error: 'Error interno del servidor' });
+    }
+
+    res.json({ success: true, data });
+  } catch (error) {
+    console.error('Error en PUT /widget/config/:businessId:', error);
+    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
