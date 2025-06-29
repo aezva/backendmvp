@@ -7,7 +7,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const assistantId = process.env.OPENAI_ASSISTANT_ID || '';
 
 // NUEVO: función para chat directo con modelo (sin Assistant API)
-export async function askNNIAWithModel(messages: {role: string, content: string}[], model: string = 'gpt-3.5-turbo') {
+export async function askNNIAWithModel(messages: {role: string, content: string}[], model: string = 'gpt-4o') {
   // Convertir los mensajes al tipo correcto para OpenAI
   const formattedMessages: ChatCompletionMessageParam[] = messages.map(m => ({ role: m.role as any, content: m.content }));
   const completion = await openai.chat.completions.create({

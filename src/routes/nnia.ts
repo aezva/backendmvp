@@ -24,7 +24,7 @@ router.post('/respond', async (req: Request, res: Response) => {
     const prompt = buildPrompt({ businessData, message, source, availability });
 
     // 4. Elegir modelo según el canal
-    let model = 'gpt-3.5-turbo';
+    let model = 'gpt-4o';
     // Si en el futuro quieres usar gpt-4 para el panel, puedes hacer:
     // if (source === 'client-panel') model = 'gpt-4';
 
