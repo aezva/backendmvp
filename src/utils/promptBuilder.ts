@@ -1,20 +1,35 @@
-export function buildPrompt({ businessData, message, source, availability, pendingAppointments, reservationData }: { 
+export function buildPrompt({ businessData, message, source, availability, pendingAppointments, reservationData, userName }: { 
   businessData: any, 
   message: string, 
   source: string, 
   availability?: any, 
   pendingAppointments?: any[],
-  reservationData?: { availability: any, types: any[], pendingReservations: any[] }
+  reservationData?: { availability: any, types: any[], pendingReservations: any[] },
+  userName?: string
 }) {
   // Obtener la fecha actual en formato largo en español
   const fechaActual = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
-  // Determinar el rol de NNIA según el canal/source
+  // Determinar el rol y personalidad de NNIA según el canal/source
   let rol = '';
+  let personalidad = '';
+  
   if (source === 'client-panel') {
-    rol = 'Eres la asistente personal del usuario, dueña o dueño del negocio. Responde de forma profesional, proactiva y con información interna del negocio.';
+    rol = 'Eres NNIA, la asistente personal del usuario. Responde de forma profesional, proactiva y con información interna del negocio.';
+    personalidad = `Tu nombre es NNIA. Eres eficiente, carismática pero profesional. No uses emojis. Formatea fechas y horas de forma conversacional (ej: "15 de marzo a las 14:30"). Si conoces el nombre del usuario, úsalo para dirigirte a él de forma personal.`;
   } else {
-    rol = 'Eres la asistente de ventas y atención al cliente del negocio. Atiendes a visitantes y potenciales clientes en la web o redes sociales. Solo usa información pública del negocio.';
+    rol = 'Eres NNIA, la asistente de ventas y atención al cliente del negocio. Atiendes a visitantes y potenciales clientes. Solo usa información pública del negocio.';
+    personalidad = `Tu nombre es NNIA. Eres eficiente, carismática pero profesional. No uses emojis. Formatea fechas y horas de forma conversacional (ej: "15 de marzo a las 14:30"). Como asistente de ventas, busca oportunidades para generar leads de forma amigable y eficaz, pero sin ser agresiva.`;
+  }
+
+  // Saludo personalizado según el contexto
+  let saludo = '';
+  if (source === 'client-panel' && userName) {
+    saludo = `Hola ${userName}, soy NNIA. ¿En qué puedo ayudarte hoy?`;
+  } else if (source === 'client-panel') {
+    saludo = 'Hola, soy NNIA. ¿En qué puedo ayudarte hoy?';
+  } else {
+    saludo = 'Hola, soy NNIA. ¿En qué puedo ayudarte?';
   }
 
   // Construir contexto del negocio con solo información pública
@@ -96,7 +111,7 @@ export function buildPrompt({ businessData, message, source, availability, pendi
   return [
     {
       role: 'user',
-      content: `Hoy es ${fechaActual}. Información del negocio: ${JSON.stringify(businessContext)}. Configuración de citas: ${JSON.stringify(citaContext)}. Citas pendientes: ${JSON.stringify(citasPendientes)}. Configuración de reservas: ${JSON.stringify(reservaContext)}. Canal: ${source}. ${rol}\n${instruccionGeneral}\n\nMensaje del usuario: ${message}`,
+      content: `Hoy es ${fechaActual}. Información del negocio: ${JSON.stringify(businessContext)}. Configuración de citas: ${JSON.stringify(citaContext)}. Citas pendientes: ${JSON.stringify(citasPendientes)}. Configuración de reservas: ${JSON.stringify(reservaContext)}. Canal: ${source}. ${rol} ${personalidad} ${saludo}\n${instruccionGeneral}\n\nMensaje del usuario: ${message}`,
     },
   ];
 } 

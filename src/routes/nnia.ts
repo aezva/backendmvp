@@ -17,15 +17,30 @@ router.post('/respond', async (req: Request, res: Response) => {
   try {
     // 1. Obtener información pública del negocio (sin datos confidenciales)
     const businessData = await getPublicBusinessData(clientId);
-    // 2. Obtener disponibilidad y tipos de cita
+    
+    // 2. Obtener información del cliente si está en el panel
+    let userName = null;
+    if (source === 'client-panel') {
+      try {
+        const clientData = await getClientData(clientId);
+        if (clientData && clientData.name) {
+          // Extraer solo el primer nombre
+          userName = clientData.name.split(' ')[0];
+        }
+      } catch (error) {
+        console.log('No se pudo obtener el nombre del cliente:', error);
+      }
+    }
+    
+    // 3. Obtener disponibilidad y tipos de cita
     const availability = await getAvailabilityAndTypes(clientId);
-    // 3. Obtener citas pendientes para evitar conflictos
+    // 4. Obtener citas pendientes para evitar conflictos
     const pendingAppointments = await getAppointments(clientId);
-    // 4. Obtener datos de reservas (disponibilidad, tipos y pendientes)
+    // 5. Obtener datos de reservas (disponibilidad, tipos y pendientes)
     const reservationData = await getReservationAvailabilityAndTypes(clientId);
     const pendingReservations = await getReservations(clientId);
 
-    // 5. Construir prompt personalizado con toda la información
+    // 6. Construir prompt personalizado con toda la información
     const prompt = buildPrompt({ 
       businessData, 
       message, 
@@ -35,21 +50,22 @@ router.post('/respond', async (req: Request, res: Response) => {
       reservationData: {
         ...reservationData,
         pendingReservations
-      }
+      },
+      userName
     });
 
-    // 6. Elegir modelo según el canal
+    // 7. Elegir modelo según el canal
     let model = 'gpt-4o';
     // Si en el futuro quieres usar gpt-4 para el panel, puedes hacer:
     // if (source === 'client-panel') model = 'gpt-4';
 
-    // 7. Llamar a la API de OpenAI con el modelo elegido
+    // 8. Llamar a la API de OpenAI con el modelo elegido
     const nniaResponse = await askNNIAWithModel(prompt, model);
     let nniaMsg = nniaResponse.message;
     let citaCreada = null;
     let reservaCreada = null;
 
-    // 8. Detectar si NNIA quiere crear una cita
+    // 9. Detectar si NNIA quiere crear una cita
     if (nniaMsg && nniaMsg.trim().startsWith('CREAR_CITA:')) {
       try {
         const citaStr = nniaMsg.replace('CREAR_CITA:', '').trim();
@@ -64,7 +80,7 @@ router.post('/respond', async (req: Request, res: Response) => {
       }
     }
 
-    // 9. Detectar si NNIA quiere crear una reserva
+    // 10. Detectar si NNIA quiere crear una reserva
     if (nniaMsg && nniaMsg.trim().startsWith('CREAR_RESERVA:')) {
       try {
         const reservaStr = nniaMsg.replace('CREAR_RESERVA:', '').trim();
