@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { buildPrompt } from '../utils/promptBuilder';
 import { askNNIAWithModel } from '../services/openai';
-import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead } from '../services/supabase';
+import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, getReservations, createReservation, getReservationAvailabilityAndTypes, getReservationTypes, createReservationType, updateReservationType, deleteReservationType, getReservationAvailability, setReservationAvailability, updateReservation, deleteReservation } from '../services/supabase';
 
 const router = Router();
 
@@ -19,21 +19,37 @@ router.post('/respond', async (req: Request, res: Response) => {
     const businessData = await getPublicBusinessData(clientId);
     // 2. Obtener disponibilidad y tipos de cita
     const availability = await getAvailabilityAndTypes(clientId);
+    // 3. Obtener citas pendientes para evitar conflictos
+    const pendingAppointments = await getAppointments(clientId);
+    // 4. Obtener datos de reservas (disponibilidad, tipos y pendientes)
+    const reservationData = await getReservationAvailabilityAndTypes(clientId);
+    const pendingReservations = await getReservations(clientId);
 
-    // 3. Construir prompt personalizado con solo información pública y disponibilidad
-    const prompt = buildPrompt({ businessData, message, source, availability });
+    // 5. Construir prompt personalizado con toda la información
+    const prompt = buildPrompt({ 
+      businessData, 
+      message, 
+      source, 
+      availability, 
+      pendingAppointments,
+      reservationData: {
+        ...reservationData,
+        pendingReservations
+      }
+    });
 
-    // 4. Elegir modelo según el canal
+    // 6. Elegir modelo según el canal
     let model = 'gpt-4o';
     // Si en el futuro quieres usar gpt-4 para el panel, puedes hacer:
     // if (source === 'client-panel') model = 'gpt-4';
 
-    // 5. Llamar a la API de OpenAI con el modelo elegido
+    // 7. Llamar a la API de OpenAI con el modelo elegido
     const nniaResponse = await askNNIAWithModel(prompt, model);
     let nniaMsg = nniaResponse.message;
     let citaCreada = null;
+    let reservaCreada = null;
 
-    // 6. Detectar si NNIA quiere crear una cita
+    // 8. Detectar si NNIA quiere crear una cita
     if (nniaMsg && nniaMsg.trim().startsWith('CREAR_CITA:')) {
       try {
         const citaStr = nniaMsg.replace('CREAR_CITA:', '').trim();
@@ -48,10 +64,26 @@ router.post('/respond', async (req: Request, res: Response) => {
       }
     }
 
+    // 9. Detectar si NNIA quiere crear una reserva
+    if (nniaMsg && nniaMsg.trim().startsWith('CREAR_RESERVA:')) {
+      try {
+        const reservaStr = nniaMsg.replace('CREAR_RESERVA:', '').trim();
+        const reservaData = JSON.parse(reservaStr);
+        // Agregar client_id y origin si falta
+        reservaData.client_id = clientId;
+        if (!reservaData.origin) reservaData.origin = source === 'client-panel' ? 'panel' : 'web';
+        reservaCreada = await createReservation(reservaData);
+        nniaMsg = `✅ Reserva realizada correctamente para ${reservaCreada.name} el ${reservaCreada.date} a las ${reservaCreada.time} (${reservaCreada.reservation_type}). Se ha enviado confirmación a tu panel.`;
+      } catch (e) {
+        nniaMsg = 'Ocurrió un error al intentar realizar la reserva. Por favor, revisa los datos e inténtalo de nuevo.';
+      }
+    }
+
     res.json({
       success: true,
       nnia: nniaMsg,
       cita: citaCreada,
+      reserva: reservaCreada,
       allMessages: nniaResponse.allMessages
     });
   } catch (error: any) {
@@ -177,6 +209,128 @@ router.post('/notifications/:id/read', async (req: Request, res: Response) => {
   try {
     const data = await markNotificationRead(req.params.id);
     res.json({ success: true, notification: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== RUTAS PARA RESERVAS =====
+
+// Obtener reservas del cliente
+router.get('/reservations', async (req: Request, res: Response) => {
+  const clientId = req.query.clientId as string;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const data = await getReservations(clientId);
+    res.json({ success: true, reservations: Array.isArray(data) ? data : [] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message, reservations: [] });
+  }
+});
+
+// Crear reserva
+router.post('/reservations', async (req: Request, res: Response) => {
+  try {
+    const data = await createReservation(req.body);
+    res.json({ success: true, reservation: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Actualizar reserva
+router.put('/reservations/:id', async (req: Request, res: Response) => {
+  try {
+    const data = await updateReservation(req.params.id, req.body);
+    res.json({ success: true, reservation: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar reserva
+router.delete('/reservations/:id', async (req: Request, res: Response) => {
+  try {
+    await deleteReservation(req.params.id);
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener tipos de reserva
+router.get('/reservation-types', async (req: Request, res: Response) => {
+  const clientId = req.query.clientId as string;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const data = await getReservationTypes(clientId);
+    res.json({ success: true, types: Array.isArray(data) ? data : [] });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message, types: [] });
+  }
+});
+
+// Crear tipo de reserva
+router.post('/reservation-types', async (req: Request, res: Response) => {
+  try {
+    const data = await createReservationType(req.body);
+    res.json({ success: true, type: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Actualizar tipo de reserva
+router.put('/reservation-types/:id', async (req: Request, res: Response) => {
+  try {
+    const data = await updateReservationType(req.params.id, req.body);
+    res.json({ success: true, type: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar tipo de reserva
+router.delete('/reservation-types/:id', async (req: Request, res: Response) => {
+  try {
+    const data = await deleteReservationType(req.params.id);
+    res.json({ success: true, type: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener disponibilidad de reservas
+router.get('/reservation-availability', async (req: Request, res: Response) => {
+  const clientId = req.query.clientId as string;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const data = await getReservationAvailability(clientId);
+    res.json({ success: true, availability: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Guardar disponibilidad de reservas
+router.post('/reservation-availability', async (req: Request, res: Response) => {
+  const { clientId, days, hours, advance_booking_days } = req.body;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const data = await setReservationAvailability(clientId, { days, hours, advance_booking_days });
+    res.json({ success: true, availability: data });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

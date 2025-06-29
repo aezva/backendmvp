@@ -1,4 +1,11 @@
-export function buildPrompt({ businessData, message, source, availability }: { businessData: any, message: string, source: string, availability?: any }) {
+export function buildPrompt({ businessData, message, source, availability, pendingAppointments, reservationData }: { 
+  businessData: any, 
+  message: string, 
+  source: string, 
+  availability?: any, 
+  pendingAppointments?: any[],
+  reservationData?: { availability: any, types: any[], pendingReservations: any[] }
+}) {
   // Obtener la fecha actual en formato largo en español
   const fechaActual = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
@@ -43,14 +50,34 @@ export function buildPrompt({ businessData, message, source, availability }: { b
     tipos_cita: availability.types
   } : {};
 
-  // Instrucción especial para agendar citas
-  const citaInstruccion = `Si en la conversación tienes todos los datos para agendar una cita (nombre, email, tipo, día y hora), responde SOLO con la frase: CREAR_CITA: seguido de los datos en formato JSON, por ejemplo: CREAR_CITA: {"name":"Juan Pérez","email":"juan@email.com","type":"phone","date":"2024-06-20","time":"10:00","origin":"web"}`;
+  // Filtrar citas pendientes (solo las futuras)
+  const citasPendientes = pendingAppointments ? pendingAppointments.filter(cita => {
+    const citaDate = new Date(cita.date);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return citaDate >= today;
+  }) : [];
+
+  // Contexto de reservas
+  const reservaContext = reservationData ? {
+    disponibilidad_reservas: reservationData.availability.days,
+    horarios_reservas: reservationData.availability.hours,
+    tipos_reserva: reservationData.types,
+    reservas_pendientes: reservationData.pendingReservations || []
+  } : {};
+
+  // Instrucción especial para agendar citas y reservas
+  const instruccionCitas = `Si en la conversación tienes todos los datos para agendar una CITA (nombre, email, tipo, día y hora), responde SOLO con la frase: CREAR_CITA: seguido de los datos en formato JSON, por ejemplo: CREAR_CITA: {"name":"Juan Pérez","email":"juan@email.com","type":"phone","date":"2024-06-20","time":"10:00","origin":"web"}. IMPORTANTE: Evita agendar citas en horarios ya ocupados.`;
+
+  const instruccionReservas = `Si en la conversación tienes todos los datos para hacer una RESERVA (nombre, email, tipo de reserva, día, hora, número de personas), responde SOLO con la frase: CREAR_RESERVA: seguido de los datos en formato JSON, por ejemplo: CREAR_RESERVA: {"name":"María García","email":"maria@email.com","reservation_type":"Mesa para 4","date":"2024-06-20","time":"19:00","people_count":4,"origin":"web"}. IMPORTANTE: Evita hacer reservas en horarios ya ocupados.`;
+
+  const instruccionGeneral = `${instruccionCitas}\n${instruccionReservas}\n\nDISTINGUE ENTRE CITAS Y RESERVAS: Las citas son para servicios profesionales (consultas, tratamientos, etc.). Las reservas son para espacios o mesas (restaurantes, hoteles, etc.). Si alguien pregunta por disponibilidad, sugiere opciones pero siempre permite que el usuario elija.`;
 
   // Solo retornar el mensaje del usuario, el contexto debe estar en la configuración del Assistant
   return [
     {
       role: 'user',
-      content: `Hoy es ${fechaActual}. Información del negocio: ${JSON.stringify(businessContext)}. Configuración de citas: ${JSON.stringify(citaContext)}. Canal: ${source}. ${rol}\n${citaInstruccion}\n\nMensaje del usuario: ${message}`,
+      content: `Hoy es ${fechaActual}. Información del negocio: ${JSON.stringify(businessContext)}. Configuración de citas: ${JSON.stringify(citaContext)}. Citas pendientes: ${JSON.stringify(citasPendientes)}. Configuración de reservas: ${JSON.stringify(reservaContext)}. Canal: ${source}. ${rol}\n${instruccionGeneral}\n\nMensaje del usuario: ${message}`,
     },
   ];
 } 

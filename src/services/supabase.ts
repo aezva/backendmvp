@@ -215,4 +215,159 @@ export async function markNotificationRead(id: string) {
     .select();
   if (error) throw error;
   return data[0];
+}
+
+// ===== FUNCIONES PARA RESERVAS =====
+
+// Obtener reservas de un cliente
+export async function getReservations(clientId: string) {
+  const { data, error } = await supabase
+    .from('reservations')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('date', { ascending: true })
+    .order('time', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+// Crear una reserva
+export async function createReservation(reservation: any) {
+  // Forzar status 'pending' si no viene definido
+  const reservationData = { ...reservation, status: reservation.status || 'pending' };
+  const { data, error } = await supabase
+    .from('reservations')
+    .insert([reservationData])
+    .select();
+  if (error) throw error;
+  const reserva = data[0];
+  
+  // Intentar crear notificación asociada, pero no fallar si hay error
+  if (reserva && reserva.client_id) {
+    try {
+      const businessInfoId = await getBusinessInfoIdByClientId(reserva.client_id);
+      await createNotification({
+        client_id: businessInfoId,
+        type: 'reserva',
+        title: 'Nueva reserva realizada',
+        body: `Se ha realizado una reserva para ${reserva.name || ''} el ${reserva.date} a las ${reserva.time} (${reserva.reservation_type}).`,
+        data: { reservationId: reserva.id },
+      });
+    } catch (notifError) {
+      console.error('Error creando notificación de reserva:', notifError);
+    }
+  }
+  return reserva;
+}
+
+// Obtener tipos de reserva de un cliente
+export async function getReservationTypes(clientId: string) {
+  const { data, error } = await supabase
+    .from('reservation_types')
+    .select('*')
+    .eq('client_id', clientId)
+    .eq('is_active', true)
+    .order('name', { ascending: true });
+  if (error) throw error;
+  return data;
+}
+
+// Crear tipo de reserva
+export async function createReservationType(reservationType: any) {
+  const { data, error } = await supabase
+    .from('reservation_types')
+    .insert([reservationType])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// Actualizar tipo de reserva
+export async function updateReservationType(id: string, updates: any) {
+  const { data, error } = await supabase
+    .from('reservation_types')
+    .update(updates)
+    .eq('id', id)
+    .select();
+  if (error) throw error;
+  return data && data[0];
+}
+
+// Eliminar tipo de reserva (desactivar)
+export async function deleteReservationType(id: string) {
+  const { data, error } = await supabase
+    .from('reservation_types')
+    .update({ is_active: false })
+    .eq('id', id)
+    .select();
+  if (error) throw error;
+  return data && data[0];
+}
+
+// Obtener disponibilidad de reservas de un cliente
+export async function getReservationAvailability(clientId: string) {
+  const { data, error } = await supabase
+    .from('reservation_availability')
+    .select('*')
+    .eq('client_id', clientId)
+    .single();
+  if (error && error.code !== 'PGRST116') throw error;
+  return data ? {
+    days: data.days ? data.days.split(',') : [],
+    hours: data.hours || '',
+    advance_booking_days: data.advance_booking_days || 30
+  } : { days: [], hours: '', advance_booking_days: 30 };
+}
+
+// Guardar o actualizar disponibilidad de reservas
+export async function setReservationAvailability(clientId: string, availability: { days: string, hours: string, advance_booking_days: number }) {
+  const { data, error } = await supabase
+    .from('reservation_availability')
+    .upsert({
+      client_id: clientId,
+      days: availability.days,
+      hours: availability.hours,
+      advance_booking_days: availability.advance_booking_days
+    })
+    .select();
+  if (error) throw error;
+  return data && data[0] ? {
+    days: data[0].days ? data[0].days.split(',') : [],
+    hours: data[0].hours || '',
+    advance_booking_days: data[0].advance_booking_days || 30
+  } : { days: [], hours: '', advance_booking_days: 30 };
+}
+
+// Actualizar una reserva
+export async function updateReservation(id: string, updates: any) {
+  const { data, error } = await supabase
+    .from('reservations')
+    .update(updates)
+    .eq('id', id)
+    .select();
+  if (error) throw error;
+  return data && data[0];
+}
+
+// Eliminar una reserva
+export async function deleteReservation(id: string) {
+  const { error } = await supabase
+    .from('reservations')
+    .delete()
+    .eq('id', id);
+  if (error) throw error;
+  return { success: true };
+}
+
+// Obtener disponibilidad y tipos de reserva de un cliente (helper para NNIA)
+export async function getReservationAvailabilityAndTypes(clientId: string) {
+  const [availability, types] = await Promise.all([
+    getReservationAvailability(clientId),
+    getReservationTypes(clientId)
+  ]);
+  
+  return {
+    availability,
+    types: types || []
+  };
 } 
