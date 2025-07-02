@@ -277,4 +277,53 @@ router.post('/notifications/:id/read', async (req: Request, res: Response) => {
   }
 });
 
+// GET /nnia/widget/config/:businessId
+router.get('/widget/config/:businessId', async (req: Request, res: Response) => {
+  const { businessId } = req.params;
+  if (!businessId) {
+    res.status(400).json({ error: 'Falta businessId' });
+    return;
+  }
+  try {
+    // Buscar configuración en widget_configs
+    const { data, error } = await req.app.locals.supabase
+      .from('widget_configs')
+      .select('config')
+      .eq('business_id', businessId)
+      .single();
+    if (error && error.code !== 'PGRST116') throw error;
+    if (data && data.config) {
+      res.json(data.config);
+      return;
+    }
+    // Si no existe, devolver configuración por defecto
+    const defaultConfig = {
+      position: 'bottom-right',
+      primaryColor: '#3b82f6',
+      backgroundColor: '#ffffff',
+      textColor: '#1f2937',
+      welcomeMessage: '¡Hola! Soy NNIA, tu asistente virtual. ¿En qué puedo ayudarte?',
+      autoOpen: false,
+      showTimestamp: true,
+      maxMessages: 50,
+      scheduleEnabled: false,
+      timezone: 'America/Mexico_City',
+      hours: {
+        monday: { start: '09:00', end: '18:00', enabled: true },
+        tuesday: { start: '09:00', end: '18:00', enabled: true },
+        wednesday: { start: '09:00', end: '18:00', enabled: true },
+        thursday: { start: '09:00', end: '18:00', enabled: true },
+        friday: { start: '09:00', end: '18:00', enabled: true },
+        saturday: { start: '10:00', end: '16:00', enabled: false },
+        sunday: { start: '10:00', end: '16:00', enabled: false }
+      },
+      offlineMessage: 'Estamos fuera de horario. Te responderemos pronto.',
+      widgetLogoUrl: null
+    };
+    res.json(defaultConfig);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router; 
