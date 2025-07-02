@@ -18,7 +18,7 @@ router.post('/respond', async (req: Request, res: Response) => {
     // 1. Guardar mensaje del usuario en la tabla messages
     const { supabase } = require('../services/supabase');
     const timestamp = new Date().toISOString();
-    await supabase.from('messages').insert({
+    const { error: userMsgError } = await supabase.from('messages').insert({
       client_id: clientId,
       sender: 'user',
       text: message,
@@ -26,6 +26,10 @@ router.post('/respond', async (req: Request, res: Response) => {
       visitor_id: visitorId || null,
       timestamp
     });
+    if (userMsgError) {
+      console.error('Error insertando mensaje del usuario:', userMsgError);
+      return res.status(500).json({ error: 'Error insertando mensaje del usuario', details: userMsgError.message });
+    }
 
     // 2. Obtener información pública del negocio (sin datos confidenciales)
     const businessData = await getPublicBusinessData(clientId);
@@ -49,7 +53,7 @@ router.post('/respond', async (req: Request, res: Response) => {
 
     // 7. Guardar respuesta de NNIA en la tabla messages
     if (nniaMsg) {
-      await supabase.from('messages').insert({
+      const { error: nniaMsgError } = await supabase.from('messages').insert({
         client_id: clientId,
         sender: 'assistant',
         text: nniaMsg,
@@ -57,6 +61,10 @@ router.post('/respond', async (req: Request, res: Response) => {
         visitor_id: visitorId || null,
         timestamp: new Date().toISOString()
       });
+      if (nniaMsgError) {
+        console.error('Error insertando mensaje de NNIA:', nniaMsgError);
+        // No detenemos el flujo, pero lo reportamos en la respuesta
+      }
     }
 
     // 8. Detectar si NNIA quiere crear una cita
