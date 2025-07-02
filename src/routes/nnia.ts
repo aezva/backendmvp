@@ -286,7 +286,8 @@ router.get('/widget/config/:businessId', async (req: Request, res: Response) => 
   }
   try {
     // Buscar configuración en widget_configs
-    const { data, error } = await req.app.locals.supabase
+    const { supabase } = require('../services/supabase');
+    const { data, error } = await supabase
       .from('widget_configs')
       .select('config')
       .eq('business_id', businessId)
