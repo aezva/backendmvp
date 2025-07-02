@@ -327,4 +327,32 @@ router.get('/widget/config/:businessId', async (req: Request, res: Response) => 
   }
 });
 
+// PUT /nnia/widget/config/:businessId
+router.put('/widget/config/:businessId', async (req: Request, res: Response) => {
+  const { businessId } = req.params;
+  const config = req.body;
+  if (!businessId || !config) {
+    res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    return;
+  }
+  try {
+    const { supabase } = require('../services/supabase');
+    // UPSERT: si existe, actualiza; si no, inserta
+    const { data, error } = await supabase
+      .from('widget_configs')
+      .upsert([
+        {
+          business_id: businessId,
+          config: config,
+          updated_at: new Date().toISOString()
+        }
+      ], { onConflict: ['business_id'] })
+      .select();
+    if (error) throw error;
+    res.json({ success: true, config: data && data[0] ? data[0].config : config });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router; 
