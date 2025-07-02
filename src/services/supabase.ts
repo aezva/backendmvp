@@ -370,4 +370,48 @@ export async function getReservationAvailabilityAndTypes(clientId: string) {
     availability,
     types: types || []
   };
+}
+
+// Crear ticket
+export async function createTicket(ticketData: any) {
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert([ticketData])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// Crear lead
+export async function createLead(leadData: any) {
+  const { data, error } = await supabase
+    .from('leads')
+    .insert([leadData])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+/**
+ * Archiva automáticamente tickets y leads con más de 7 días de antigüedad y estado distinto de 'archived'.
+ * Retorna el número de elementos archivados por tipo.
+ */
+export async function autoArchiveOldTicketsAndLeads() {
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  // Archivar tickets
+  const { data: ticketData, error: ticketError } = await supabase
+    .from('tickets')
+    .update({ status: 'archived' })
+    .lt('created_at', sevenDaysAgo)
+    .neq('status', 'archived')
+    .select('*');
+  // Archivar leads
+  const { data: leadData, error: leadError } = await supabase
+    .from('leads')
+    .update({ status: 'archived' })
+    .lt('created_at', sevenDaysAgo)
+    .neq('status', 'archived')
+    .select('*');
+  if (ticketError || leadError) throw ticketError || leadError;
+  return { tickets: ticketData ? ticketData.length : 0, leads: leadData ? leadData.length : 0 };
 } 

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { buildPrompt } from '../utils/promptBuilder';
 import { askNNIAWithModel } from '../services/openai';
-import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, getReservations, createReservation, getReservationAvailabilityAndTypes, getReservationTypes, createReservationType, updateReservationType, deleteReservationType, getReservationAvailability, setReservationAvailability, updateReservation, deleteReservation, supabase } from '../services/supabase';
+import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, createTicket, createLead } from '../services/supabase';
 
 const router = Router();
 
@@ -17,60 +17,29 @@ router.post('/respond', async (req: Request, res: Response) => {
   try {
     // 1. Obtener información pública del negocio (sin datos confidenciales)
     const businessData = await getPublicBusinessData(clientId);
-    
-    // 2. Obtener información del cliente si está en el panel
-    let userName = null;
-    if (source === 'client-panel') {
-      try {
-        const clientData = await getClientData(clientId);
-        if (clientData && clientData.name) {
-          // Extraer solo el primer nombre
-          userName = clientData.name.split(' ')[0];
-        }
-      } catch (error) {
-        console.log('No se pudo obtener el nombre del cliente:', error);
-      }
-    }
-    
-    // 3. Obtener disponibilidad y tipos de cita
+    // 2. Obtener disponibilidad y tipos de cita
     const availability = await getAvailabilityAndTypes(clientId);
-    // 4. Obtener citas pendientes para evitar conflictos
-    const pendingAppointments = await getAppointments(clientId);
-    // 5. Obtener datos de reservas (disponibilidad, tipos y pendientes)
-    const reservationData = await getReservationAvailabilityAndTypes(clientId);
-    const pendingReservations = await getReservations(clientId);
 
-    // 6. Construir prompt personalizado con toda la información
-    const prompt = buildPrompt({ 
-      businessData, 
-      message, 
-      source, 
-      availability, 
-      pendingAppointments,
-      reservationData: {
-        ...reservationData,
-        pendingReservations
-      },
-      userName
-    });
+    // 3. Construir prompt personalizado con solo información pública y disponibilidad
+    const prompt = buildPrompt({ businessData, message, source, availability });
 
-    // 7. Elegir modelo según el canal
+    // 4. Elegir modelo según el canal
     let model = 'gpt-4o';
     // Si en el futuro quieres usar gpt-4 para el panel, puedes hacer:
     // if (source === 'client-panel') model = 'gpt-4';
 
-    // 8. Llamar a la API de OpenAI con el modelo elegido
+    // 5. Llamar a la API de OpenAI con el modelo elegido
     const nniaResponse = await askNNIAWithModel(prompt, model);
     let nniaMsg = nniaResponse.message;
     let citaCreada = null;
-    let reservaCreada = null;
+    let ticketCreado = null;
+    let leadCreado = null;
 
-    // 9. Detectar si NNIA quiere crear una cita
+    // 6. Detectar si NNIA quiere crear una cita
     if (nniaMsg && nniaMsg.trim().startsWith('CREAR_CITA:')) {
       try {
         const citaStr = nniaMsg.replace('CREAR_CITA:', '').trim();
         const citaData = JSON.parse(citaStr);
-        // Agregar client_id y origin si falta
         citaData.client_id = clientId;
         if (!citaData.origin) citaData.origin = source === 'client-panel' ? 'panel' : 'web';
         citaCreada = await createAppointment(citaData);
@@ -80,26 +49,75 @@ router.post('/respond', async (req: Request, res: Response) => {
       }
     }
 
-    // 10. Detectar si NNIA quiere crear una reserva
-    if (nniaMsg && nniaMsg.trim().startsWith('CREAR_RESERVA:')) {
-      try {
-        const reservaStr = nniaMsg.replace('CREAR_RESERVA:', '').trim();
-        const reservaData = JSON.parse(reservaStr);
-        // Agregar client_id y origin si falta
-        reservaData.client_id = clientId;
-        if (!reservaData.origin) reservaData.origin = source === 'client-panel' ? 'panel' : 'web';
-        reservaCreada = await createReservation(reservaData);
-        nniaMsg = `✅ Reserva realizada correctamente para ${reservaCreada.name} el ${reservaCreada.date} a las ${reservaCreada.time} (${reservaCreada.reservation_type}). Se ha enviado confirmación a tu panel.`;
-      } catch (e) {
-        nniaMsg = 'Ocurrió un error al intentar realizar la reserva. Por favor, revisa los datos e inténtalo de nuevo.';
-      }
+    // 7. Detectar si el mensaje o la respuesta de NNIA implica un ticket o lead
+    // Lógica flexible: buscar frases clave en la respuesta de NNIA
+    const ticketKeywords = [
+      'responsable', 'humano', 'agente', 'soporte', 'te comunicamos', 'te contactará', 'espera un momento', 'derivar', 'atención personalizada', 'ticket', 'te transferimos', 'un encargado', 'un asesor', 'un especialista'
+    ];
+    const leadKeywords = [
+      'correo', 'email', 'teléfono', 'contacto', 'déjanos tus datos', 'deja tus datos', 'te contactamos', 'te escribimos', 'te llamamos', 'deja tu email', 'deja tu número', 'deja tu teléfono', 'ponte en contacto', 'te responderemos', 'te avisamos', 'te notificamos'
+    ];
+
+    // Normalizar texto para búsqueda
+    const lowerMsg = (nniaMsg || '').toLowerCase();
+    const lowerUserMsg = (message || '').toLowerCase();
+
+    // ¿Es ticket?
+    const isTicket = ticketKeywords.some(k => lowerMsg.includes(k) || lowerUserMsg.includes(k));
+    // ¿Es lead?
+    const isLead = leadKeywords.some(k => lowerMsg.includes(k) || lowerUserMsg.includes(k));
+
+    // 8. Si es ticket, crear ticket y notificación
+    if (isTicket && visitorId) {
+      ticketCreado = await createTicket({
+        client_id: clientId,
+        visitor_id: visitorId,
+        visitor_name: null, // Se puede extraer si se implementa lógica adicional
+        status: 'open',
+        message: message,
+        created_at: new Date().toISOString()
+      });
+      await createNotification({
+        client_id: clientId,
+        type: 'ticket',
+        title: 'Nuevo ticket de soporte',
+        body: `Un visitante ha solicitado hablar con un responsable.`,
+        data: { ticketId: ticketCreado.id, visitorId }
+      });
+    }
+
+    // 9. Si es lead, crear lead y notificación
+    if (isLead && visitorId) {
+      // Intentar extraer email y teléfono del mensaje del usuario o de la respuesta de NNIA
+      const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
+      const phoneRegex = /\+?\d[\d\s\-]{7,}/g;
+      const emailMatch = (message.match(emailRegex) || lowerMsg.match(emailRegex) || [])[0] || null;
+      const phoneMatch = (message.match(phoneRegex) || lowerMsg.match(phoneRegex) || [])[0] || null;
+      leadCreado = await createLead({
+        client_id: clientId,
+        visitor_id: visitorId,
+        visitor_name: null, // Se puede extraer si se implementa lógica adicional
+        visitor_email: emailMatch,
+        visitor_phone: phoneMatch,
+        source: source,
+        message: message,
+        created_at: new Date().toISOString()
+      });
+      await createNotification({
+        client_id: clientId,
+        type: 'lead',
+        title: 'Nuevo lead capturado',
+        body: `NNIA ha capturado un nuevo lead de contacto de un visitante.`,
+        data: { leadId: leadCreado.id, visitorId }
+      });
     }
 
     res.json({
       success: true,
       nnia: nniaMsg,
       cita: citaCreada,
-      reserva: reservaCreada,
+      ticket: ticketCreado,
+      lead: leadCreado,
       allMessages: nniaResponse.allMessages
     });
   } catch (error: any) {
@@ -174,6 +192,35 @@ router.get('/availability', async (req: Request, res: Response) => {
   }
   try {
     const data = await getAvailability(clientId);
+    // Si no existe configuración, devolver valores por defecto
+    if (!data) {
+      const defaultConfig = {
+        position: 'bottom-right',
+        primaryColor: '#3b82f6',
+        backgroundColor: '#ffffff',
+        textColor: '#1f2937',
+        welcomeMessage: '¡Hola! Soy NNIA, tu asistente virtual. ¿En qué puedo ayudarte?',
+        autoOpen: false,
+        showTimestamp: true,
+        maxMessages: 50,
+        scheduleEnabled: false,
+        timezone: 'America/Mexico_City',
+        hours: {
+          monday: { start: '09:00', end: '18:00', enabled: true },
+          tuesday: { start: '09:00', end: '18:00', enabled: true },
+          wednesday: { start: '09:00', end: '18:00', enabled: true },
+          thursday: { start: '09:00', end: '18:00', enabled: true },
+          friday: { start: '09:00', end: '18:00', enabled: true },
+          saturday: { start: '10:00', end: '16:00', enabled: false },
+          sunday: { start: '10:00', end: '16:00', enabled: false }
+        },
+        offlineMessage: 'Estamos fuera de horario. Te responderemos pronto.',
+        widgetLogoUrl: null
+      };
+      
+      res.json(defaultConfig);
+      return;
+    }
     res.json({ success: true, availability: data });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -227,225 +274,6 @@ router.post('/notifications/:id/read', async (req: Request, res: Response) => {
     res.json({ success: true, notification: data });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
-  }
-});
-
-// ===== RUTAS PARA RESERVAS =====
-
-// Obtener reservas del cliente
-router.get('/reservations', async (req: Request, res: Response) => {
-  const clientId = req.query.clientId as string;
-  if (!clientId) {
-    res.status(400).json({ error: 'Falta clientId' });
-    return;
-  }
-  try {
-    const data = await getReservations(clientId);
-    res.json({ success: true, reservations: Array.isArray(data) ? data : [] });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message, reservations: [] });
-  }
-});
-
-// Crear reserva
-router.post('/reservations', async (req: Request, res: Response) => {
-  try {
-    const data = await createReservation(req.body);
-    res.json({ success: true, reservation: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Actualizar reserva
-router.put('/reservations/:id', async (req: Request, res: Response) => {
-  try {
-    const data = await updateReservation(req.params.id, req.body);
-    res.json({ success: true, reservation: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Eliminar reserva
-router.delete('/reservations/:id', async (req: Request, res: Response) => {
-  try {
-    await deleteReservation(req.params.id);
-    res.json({ success: true });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Obtener tipos de reserva
-router.get('/reservation-types', async (req: Request, res: Response) => {
-  const clientId = req.query.clientId as string;
-  if (!clientId) {
-    res.status(400).json({ error: 'Falta clientId' });
-    return;
-  }
-  try {
-    const data = await getReservationTypes(clientId);
-    res.json({ success: true, types: Array.isArray(data) ? data : [] });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message, types: [] });
-  }
-});
-
-// Crear tipo de reserva
-router.post('/reservation-types', async (req: Request, res: Response) => {
-  try {
-    const data = await createReservationType(req.body);
-    res.json({ success: true, type: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Actualizar tipo de reserva
-router.put('/reservation-types/:id', async (req: Request, res: Response) => {
-  try {
-    const data = await updateReservationType(req.params.id, req.body);
-    res.json({ success: true, type: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Eliminar tipo de reserva
-router.delete('/reservation-types/:id', async (req: Request, res: Response) => {
-  try {
-    const data = await deleteReservationType(req.params.id);
-    res.json({ success: true, type: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Obtener disponibilidad de reservas
-router.get('/reservation-availability', async (req: Request, res: Response) => {
-  const clientId = req.query.clientId as string;
-  if (!clientId) {
-    res.status(400).json({ error: 'Falta clientId' });
-    return;
-  }
-  try {
-    const data = await getReservationAvailability(clientId);
-    res.json({ success: true, availability: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Guardar disponibilidad de reservas
-router.post('/reservation-availability', async (req: Request, res: Response) => {
-  const { clientId, days, hours, advance_booking_days } = req.body;
-  if (!clientId) {
-    res.status(400).json({ error: 'Falta clientId' });
-    return;
-  }
-  try {
-    const data = await setReservationAvailability(clientId, { days, hours, advance_booking_days });
-    res.json({ success: true, availability: data });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Endpoints para configuración del widget
-router.get('/widget/config/:businessId', async (req: Request, res: Response) => {
-  try {
-    const { businessId } = req.params;
-    
-    // Obtener configuración del widget desde Supabase
-    const { data, error } = await supabase
-      .from('widget_configs')
-      .select('*')
-      .eq('business_id', businessId)
-      .single();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error al obtener configuración del widget:', error);
-      res.status(500).json({ error: 'Error interno del servidor' });
-      return;
-    }
-
-    // Si no existe configuración, devolver valores por defecto
-    if (!data) {
-      const defaultConfig = {
-        position: 'bottom-right',
-        primaryColor: '#3b82f6',
-        backgroundColor: '#ffffff',
-        textColor: '#1f2937',
-        welcomeMessage: '¡Hola! Soy NNIA, tu asistente virtual. ¿En qué puedo ayudarte?',
-        autoOpen: false,
-        showTimestamp: true,
-        maxMessages: 50,
-        scheduleEnabled: false,
-        timezone: 'America/Mexico_City',
-        hours: {
-          monday: { start: '09:00', end: '18:00', enabled: true },
-          tuesday: { start: '09:00', end: '18:00', enabled: true },
-          wednesday: { start: '09:00', end: '18:00', enabled: true },
-          thursday: { start: '09:00', end: '18:00', enabled: true },
-          friday: { start: '09:00', end: '18:00', enabled: true },
-          saturday: { start: '10:00', end: '16:00', enabled: false },
-          sunday: { start: '10:00', end: '16:00', enabled: false }
-        },
-        offlineMessage: 'Estamos fuera de horario. Te responderemos pronto.'
-      };
-      
-      res.json(defaultConfig);
-      return;
-    }
-
-    res.json(data.config);
-  } catch (error) {
-    console.error('Error en GET /widget/config/:businessId:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
-  }
-});
-
-router.put('/widget/config/:businessId', async (req: Request, res: Response) => {
-  try {
-    const { businessId } = req.params;
-    const config = req.body;
-    
-    // Validar que el businessId existe
-    const { data: business, error: businessError } = await supabase
-      .from('clients')
-      .select('id')
-      .eq('id', businessId)
-      .single();
-
-    if (businessError || !business) {
-      res.status(404).json({ error: 'Negocio no encontrado' });
-      return;
-    }
-
-    // Upsert configuración del widget
-    const { data, error } = await supabase
-      .from('widget_configs')
-      .upsert({
-        business_id: businessId,
-        config: config,
-        updated_at: new Date().toISOString()
-      }, {
-        onConflict: 'business_id'
-      })
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error al guardar configuración del widget:', error);
-      res.status(500).json({ error: 'Error interno del servidor' });
-      return;
-    }
-
-    res.json({ success: true, data });
-  } catch (error) {
-    console.error('Error en PUT /widget/config/:businessId:', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
   }
 });
 
