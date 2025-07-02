@@ -15,27 +15,51 @@ router.post('/respond', async (req: Request, res: Response) => {
   }
 
   try {
-    // 1. Obtener información pública del negocio (sin datos confidenciales)
+    // 1. Guardar mensaje del usuario en la tabla messages
+    const { supabase } = require('../services/supabase');
+    const timestamp = new Date().toISOString();
+    await supabase.from('messages').insert({
+      client_id: clientId,
+      sender: 'user',
+      text: message,
+      source: source,
+      visitor_id: visitorId || null,
+      timestamp
+    });
+
+    // 2. Obtener información pública del negocio (sin datos confidenciales)
     const businessData = await getPublicBusinessData(clientId);
-    // 2. Obtener disponibilidad y tipos de cita
+    // 3. Obtener disponibilidad y tipos de cita
     const availability = await getAvailabilityAndTypes(clientId);
 
-    // 3. Construir prompt personalizado con solo información pública y disponibilidad
+    // 4. Construir prompt personalizado con solo información pública y disponibilidad
     const prompt = buildPrompt({ businessData, message, source, availability });
 
-    // 4. Elegir modelo según el canal
+    // 5. Elegir modelo según el canal
     let model = 'gpt-4o';
     // Si en el futuro quieres usar gpt-4 para el panel, puedes hacer:
     // if (source === 'client-panel') model = 'gpt-4';
 
-    // 5. Llamar a la API de OpenAI con el modelo elegido
+    // 6. Llamar a la API de OpenAI con el modelo elegido
     const nniaResponse = await askNNIAWithModel(prompt, model);
     let nniaMsg = nniaResponse.message;
     let citaCreada = null;
     let ticketCreado = null;
     let leadCreado = null;
 
-    // 6. Detectar si NNIA quiere crear una cita
+    // 7. Guardar respuesta de NNIA en la tabla messages
+    if (nniaMsg) {
+      await supabase.from('messages').insert({
+        client_id: clientId,
+        sender: 'assistant',
+        text: nniaMsg,
+        source: 'nnia',
+        visitor_id: visitorId || null,
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 8. Detectar si NNIA quiere crear una cita
     if (nniaMsg && nniaMsg.trim().startsWith('CREAR_CITA:')) {
       try {
         const citaStr = nniaMsg.replace('CREAR_CITA:', '').trim();
@@ -49,7 +73,7 @@ router.post('/respond', async (req: Request, res: Response) => {
       }
     }
 
-    // 7. Detectar si el mensaje o la respuesta de NNIA implica un ticket o lead
+    // 9. Detectar si el mensaje o la respuesta de NNIA implica un ticket o lead
     // Lógica flexible: buscar frases clave en la respuesta de NNIA
     const ticketKeywords = [
       'responsable', 'humano', 'agente', 'soporte', 'te comunicamos', 'te contactará', 'espera un momento', 'derivar', 'atención personalizada', 'ticket', 'te transferimos', 'un encargado', 'un asesor', 'un especialista'
@@ -67,7 +91,7 @@ router.post('/respond', async (req: Request, res: Response) => {
     // ¿Es lead?
     const isLead = leadKeywords.some(k => lowerMsg.includes(k) || lowerUserMsg.includes(k));
 
-    // 8. Si es ticket, crear ticket y notificación
+    // 10. Si es ticket, crear ticket y notificación
     if (isTicket && visitorId) {
       ticketCreado = await createTicket({
         client_id: clientId,
@@ -86,7 +110,7 @@ router.post('/respond', async (req: Request, res: Response) => {
       });
     }
 
-    // 9. Si es lead, crear lead y notificación
+    // 11. Si es lead, crear lead y notificación
     if (isLead && visitorId) {
       // Intentar extraer email y teléfono del mensaje del usuario o de la respuesta de NNIA
       const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g;
