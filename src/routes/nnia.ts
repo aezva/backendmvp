@@ -28,7 +28,8 @@ router.post('/respond', async (req: Request, res: Response) => {
     });
     if (userMsgError) {
       console.error('Error insertando mensaje del usuario:', userMsgError);
-      return res.status(500).json({ error: 'Error insertando mensaje del usuario', details: userMsgError.message });
+      res.status(500).json({ error: 'Error insertando mensaje del usuario', details: userMsgError.message });
+      return;
     }
 
     // 2. Obtener información pública del negocio (sin datos confidenciales)
