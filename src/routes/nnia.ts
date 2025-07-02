@@ -388,4 +388,44 @@ router.put('/widget/config/:businessId', async (req: Request, res: Response) => 
   }
 });
 
+// GET /nnia/conversations?clientId=...
+router.get('/conversations', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const { supabase } = require('../services/supabase');
+    // Obtener el último mensaje de cada conversación (visitor_id)
+    const { data, error } = await supabase.rpc('get_conversations', { p_client_id: clientId });
+    if (error) throw error;
+    res.json({ success: true, conversations: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /nnia/messages?clientId=...&visitorId=...
+router.get('/messages', async (req: Request, res: Response) => {
+  const { clientId, visitorId } = req.query;
+  if (!clientId || !visitorId) {
+    res.status(400).json({ error: 'Faltan parámetros requeridos' });
+    return;
+  }
+  try {
+    const { supabase } = require('../services/supabase');
+    const { data, error } = await supabase
+      .from('messages')
+      .select('*')
+      .eq('client_id', clientId)
+      .eq('visitor_id', visitorId)
+      .order('timestamp', { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, messages: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router; 
