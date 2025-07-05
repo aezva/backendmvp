@@ -132,6 +132,7 @@ router.post('/respond', async (req: Request, res: Response) => {
     }
 
     // Guardar respuesta final de NNIA en la tabla messages (después de todas las modificaciones)
+    console.log('Respuesta de NNIA antes de guardar:', nniaMsg);
     if (nniaMsg) {
       const { error: nniaMsgError } = await supabase.from('messages').insert({
         client_id: clientId,
@@ -143,8 +144,11 @@ router.post('/respond', async (req: Request, res: Response) => {
       });
       if (nniaMsgError) {
         console.error('Error insertando mensaje de NNIA:', nniaMsgError);
-        // No detenemos el flujo, pero lo reportamos en la respuesta
+      } else {
+        console.log('Mensaje de NNIA guardado correctamente en la base de datos.');
       }
+    } else {
+      console.warn('nniaMsg está vacío, no se guarda respuesta de NNIA.');
     }
 
     res.json({

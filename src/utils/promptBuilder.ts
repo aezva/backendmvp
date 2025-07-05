@@ -82,25 +82,29 @@ export function buildPrompt({ businessData, message, source, availability, pendi
   } : {};
 
   // Instrucción especial para agendar citas y reservas
-  const instruccionCitas = `Si en la conversación tienes todos los datos para agendar una CITA (nombre, email, tipo, día y hora), responde SOLO con la frase: CREAR_CITA: seguido de los datos en formato JSON, por ejemplo: CREAR_CITA: {"name":"Juan Pérez","email":"juan@email.com","type":"phone","date":"2024-06-20","time":"10:00","origin":"web"}. IMPORTANTE: Evita agendar citas en horarios ya ocupados.`;
+  const instruccionCitas = `
+Si en la conversación tienes todos los datos para agendar una CITA (nombre, email, tipo, día y hora), responde SOLO con la frase: CREAR_CITA: seguido de los datos en formato JSON, por ejemplo: CREAR_CITA: {"name":"Juan Pérez","email":"juan@email.com","type":"phone","date":"2024-06-20","time":"10:00","origin":"web"}. IMPORTANTE: Evita agendar citas en horarios ya ocupados.
+
+Sé flexible: reconoce cuando el usuario quiere agendar una cita aunque use frases informales, sinónimos o expresiones diferentes (por ejemplo: "quiero reservar una consulta", "me gustaría una llamada", "puedo ir el lunes a las 10", "necesito una cita para el doctor", etc.). Si falta algún dato, pregunta de forma natural y conversacional, sin repetir preguntas ya respondidas. Si el usuario da la información en varios mensajes, recuerda el contexto y complétalo.
+  `;
+
+  const instruccionTickets = `
+Si el usuario pide ayuda, soporte, hablar con un responsable, administrador, agente, humano, especialista, o usa cualquier frase similar (por ejemplo: "necesito ayuda", "quiero hablar con alguien", "puedes transferirme con un humano", "hay alguien que me pueda ayudar", etc.), considera que quiere hablar con un responsable y responde de forma empática. Además, responde SOLO con la frase: CREAR_TICKET: seguido de los datos en formato JSON, por ejemplo: CREAR_TICKET: {"visitor_id":"[visitor_id]","motivo":"El usuario pidió hablar con un responsable","mensaje":"[mensaje original]"}. Si puedes, incluye el nombre o email si el usuario lo proporcionó. Si ya existe un ticket abierto, notifícalo de forma amable.
+  `;
 
   const instruccionReservas = `Para RESERVAS, sé inteligente y eficiente:
 
 1. Si el usuario ya te ha dado información (nombre, personas, día, hora), úsala directamente. No repitas preguntas ya respondidas.
-
 2. Si falta información, pregunta solo lo que necesitas de forma natural y conversacional.
-
 3. Si el usuario no especifica día/hora, muéstrale la disponibilidad disponible de forma amigable.
-
 4. Una vez que tengas TODOS los datos necesarios, responde SOLO con: CREAR_RESERVA: seguido de los datos en formato JSON, por ejemplo: CREAR_RESERVA: {"name":"María García","email":"maria@email.com","reservation_type":"Mesa para 4","date":"2024-06-20","time":"19:00","people_count":4,"origin":"web"}.
-
 5. IMPORTANTE: 
    - Evita hacer reservas en horarios ya ocupados
    - Sé conversacional y natural, no robótico
    - Usa tu inteligencia para recordar información ya proporcionada
    - Sugiere opciones cuando sea apropiado`;
 
-  const instruccionGeneral = `${instruccionCitas}\n${instruccionReservas}\n\nDISTINGUE ENTRE CITAS Y RESERVAS: Las citas son para servicios profesionales (consultas, tratamientos, etc.). Las reservas son para espacios o mesas (restaurantes, hoteles, etc.). Usa tu inteligencia natural para mantener conversaciones fluidas y eficientes.`;
+  const instruccionGeneral = `${instruccionCitas}\n${instruccionReservas}\n${instruccionTickets}\n\nDISTINGUE ENTRE CITAS, RESERVAS Y TICKETS: Las citas son para servicios profesionales (consultas, tratamientos, etc.). Las reservas son para espacios o mesas (restaurantes, hoteles, etc.). Los tickets son para solicitudes de ayuda, soporte o hablar con un responsable. Usa tu inteligencia natural para mantener conversaciones fluidas y eficientes. Si el usuario pide algo fuera de estas funciones, responde de forma útil, profesional y conversacional, como lo haría ChatGPT.`;
 
   // Solo retornar el mensaje del usuario, el contexto debe estar en la configuración del Assistant
   return [
