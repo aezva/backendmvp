@@ -36,9 +36,39 @@ router.post('/respond', async (req: Request, res: Response) => {
     const businessData = await getPublicBusinessData(clientId);
     // 3. Obtener disponibilidad y tipos de cita
     const availability = await getAvailabilityAndTypes(clientId);
+    
+    // 3.1. Obtener datos de reservas si están configurados
+    let reservationData: { availability: any, types: any[], pendingReservations: any[] } | undefined = undefined;
+    try {
+      const { supabase } = require('../services/supabase');
+      // Buscar configuración de reservas
+      const { data: reservaConfig } = await supabase
+        .from('reservation_configs')
+        .select('*')
+        .eq('client_id', clientId)
+        .single();
+      
+      if (reservaConfig) {
+        // Obtener reservas pendientes
+        const { data: pendingReservations } = await supabase
+          .from('reservations')
+          .select('*')
+          .eq('client_id', clientId)
+          .gte('date', new Date().toISOString().split('T')[0])
+          .order('date', { ascending: true });
+        
+        reservationData = {
+          availability: reservaConfig.availability,
+          types: reservaConfig.types || [],
+          pendingReservations: pendingReservations || []
+        };
+      }
+    } catch (e) {
+      console.log('No hay configuración de reservas para este cliente');
+    }
 
     // 4. Construir prompt personalizado con solo información pública y disponibilidad
-    const prompt = buildPrompt({ businessData, message, source, availability });
+    const prompt = buildPrompt({ businessData, message, source, availability, reservationData });
 
     // 5. Elegir modelo según el canal
     let model = 'gpt-4o';
@@ -65,6 +95,67 @@ router.post('/respond', async (req: Request, res: Response) => {
         nniaMsg = `✅ Cita agendada correctamente para ${citaCreada.name} el ${citaCreada.date} a las ${citaCreada.time} (${citaCreada.type}). Se ha enviado confirmación a tu panel.`;
       } catch (e) {
         nniaMsg = 'Ocurrió un error al intentar agendar la cita. Por favor, revisa los datos e inténtalo de nuevo.';
+      }
+    }
+
+    // 8.1. Detectar si NNIA quiere crear una reserva
+    if (nniaMsg && nniaMsg.trim().startsWith('CREAR_RESERVA:')) {
+      try {
+        const reservaStr = nniaMsg.replace('CREAR_RESERVA:', '').trim();
+        const reservaData = JSON.parse(reservaStr);
+        reservaData.client_id = clientId;
+        if (!reservaData.origin) reservaData.origin = source === 'client-panel' ? 'panel' : 'web';
+        
+        // Crear la reserva en la tabla reservations
+        const { supabase } = require('../services/supabase');
+        const { data: reservaCreada, error: reservaError } = await supabase
+          .from('reservations')
+          .insert([reservaData])
+          .select()
+          .single();
+        
+        if (reservaError) throw reservaError;
+        
+        nniaMsg = `✅ Reserva confirmada para ${reservaData.name} el ${reservaData.date} a las ${reservaData.time} (${reservaData.people_count} personas). Se ha enviado confirmación a tu panel.`;
+        
+        // Crear notificación
+        await createNotification({
+          client_id: clientId,
+          type: 'reservation',
+          title: 'Nueva reserva',
+          body: `Nueva reserva para ${reservaData.name} el ${reservaData.date} a las ${reservaData.time}`,
+          data: { reservationId: reservaCreada.id, visitorId }
+        });
+      } catch (e) {
+        console.error('Error creando reserva:', e);
+        nniaMsg = 'Ocurrió un error al intentar crear la reserva. Por favor, revisa los datos e inténtalo de nuevo.';
+      }
+    }
+
+    // 8.2. Detectar si NNIA quiere crear un ticket
+    if (nniaMsg && nniaMsg.trim().startsWith('CREAR_TICKET:')) {
+      try {
+        const ticketStr = nniaMsg.replace('CREAR_TICKET:', '').trim();
+        const ticketData = JSON.parse(ticketStr);
+        ticketData.client_id = clientId;
+        ticketData.visitor_id = visitorId;
+        ticketData.status = 'open';
+        ticketData.created_at = new Date().toISOString();
+        
+        ticketCreado = await createTicket(ticketData);
+        nniaMsg = `✅ He creado un ticket para que un responsable se ponga en contacto contigo pronto. Te notificaremos cuando te contacten.`;
+        
+        // Crear notificación
+        await createNotification({
+          client_id: clientId,
+          type: 'ticket',
+          title: 'Nuevo ticket de soporte',
+          body: `Un visitante ha solicitado hablar con un responsable.`,
+          data: { ticketId: ticketCreado.id, visitorId }
+        });
+      } catch (e) {
+        console.error('Error creando ticket:', e);
+        nniaMsg = 'Ocurrió un error al crear el ticket. Por favor, inténtalo de nuevo.';
       }
     }
 
