@@ -52,21 +52,7 @@ router.post('/respond', async (req: Request, res: Response) => {
     let ticketCreado = null;
     let leadCreado = null;
 
-    // 7. Guardar respuesta de NNIA en la tabla messages
-    if (nniaMsg) {
-      const { error: nniaMsgError } = await supabase.from('messages').insert({
-        client_id: clientId,
-        sender: 'assistant',
-        text: nniaMsg,
-        source: 'nnia',
-        visitor_id: visitorId || null,
-        timestamp: new Date().toISOString()
-      });
-      if (nniaMsgError) {
-        console.error('Error insertando mensaje de NNIA:', nniaMsgError);
-        // No detenemos el flujo, pero lo reportamos en la respuesta
-      }
-    }
+    // 7. Guardar respuesta de NNIA en la tabla messages (se guardará después de todas las modificaciones)
 
     // 8. Detectar si NNIA quiere crear una cita
     if (nniaMsg && nniaMsg.trim().startsWith('CREAR_CITA:')) {
@@ -143,6 +129,22 @@ router.post('/respond', async (req: Request, res: Response) => {
         body: `NNIA ha capturado un nuevo lead de contacto de un visitante.`,
         data: { leadId: leadCreado.id, visitorId }
       });
+    }
+
+    // Guardar respuesta final de NNIA en la tabla messages (después de todas las modificaciones)
+    if (nniaMsg) {
+      const { error: nniaMsgError } = await supabase.from('messages').insert({
+        client_id: clientId,
+        sender: 'assistant',
+        text: nniaMsg,
+        source: 'nnia',
+        visitor_id: visitorId || null,
+        timestamp: new Date().toISOString()
+      });
+      if (nniaMsgError) {
+        console.error('Error insertando mensaje de NNIA:', nniaMsgError);
+        // No detenemos el flujo, pero lo reportamos en la respuesta
+      }
     }
 
     res.json({
