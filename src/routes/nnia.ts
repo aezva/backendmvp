@@ -285,7 +285,7 @@ router.post('/analyze-document', async (req: Request, res: Response) => {
     } else if (file_type === 'xlsx' || file_type === 'xls') {
       const workbook = xlsx.read(buffer, { type: 'buffer' });
       let text = '';
-      workbook.SheetNames.forEach((sheetName) => {
+      workbook.SheetNames.forEach((sheetName: string) => {
         const sheet = workbook.Sheets[sheetName];
         const csv = xlsx.utils.sheet_to_csv(sheet);
         text += csv + '\n';
@@ -294,7 +294,7 @@ router.post('/analyze-document', async (req: Request, res: Response) => {
     } else {
       // Fallback: usar textract para otros tipos
       extractedText = await new Promise((resolve, reject) => {
-        textract.fromBufferWithName('file.' + file_type, buffer, (err, text) => {
+        textract.fromBufferWithName('file.' + file_type, buffer, (err: any, text: any) => {
           if (err) reject(err);
           else resolve(text);
         });
@@ -306,7 +306,9 @@ router.post('/analyze-document', async (req: Request, res: Response) => {
     // Limitar el texto a 8000 caracteres para OpenAI (ajustable)
     const limitedText = extractedText.slice(0, 8000);
     const fullPrompt = `${prompt}\n\nTexto del documento:\n${limitedText}`;
-    const nniaResponse = await askNNIAWithModel(fullPrompt, 'gpt-4o');
+    const nniaResponse = await askNNIAWithModel([
+      { role: 'user', content: fullPrompt }
+    ], 'gpt-4o');
     res.json({ result: nniaResponse.message });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
