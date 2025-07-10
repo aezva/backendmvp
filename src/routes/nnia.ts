@@ -229,6 +229,49 @@ router.post('/respond', async (req: Request, res: Response) => {
       });
     }
 
+    // Comandos de gestión de documentos desde el chat
+    // Formato esperado en la respuesta de NNIA:
+    // CREAR_DOCUMENTO:{"name":"...","content":"..."}
+    // EDITAR_DOCUMENTO:{"id":"...","name":"...","content":"..."}
+    // ELIMINAR_DOCUMENTO:{"id":"..."}
+    if (nniaMsg && nniaMsg.trim().startsWith('CREAR_DOCUMENTO:')) {
+      try {
+        const docStr = nniaMsg.replace('CREAR_DOCUMENTO:', '').trim();
+        const docData = JSON.parse(docStr);
+        const newDoc = await createDocument({
+          client_id: clientId,
+          name: docData.name || `Documento NNIA - ${new Date().toLocaleString()}`,
+          content: docData.content || '',
+        });
+        nniaMsg = `✅ El documento "${newDoc.name}" fue creado correctamente.`;
+      } catch (e) {
+        nniaMsg = 'Ocurrió un error al crear el documento. Por favor, revisa los datos e inténtalo de nuevo.';
+      }
+    }
+    if (nniaMsg && nniaMsg.trim().startsWith('EDITAR_DOCUMENTO:')) {
+      try {
+        const editStr = nniaMsg.replace('EDITAR_DOCUMENTO:', '').trim();
+        const editData = JSON.parse(editStr);
+        const updated = await updateDocument(editData.id, clientId, {
+          name: editData.name,
+          content: editData.content
+        });
+        nniaMsg = `✅ El documento "${updated.name}" fue actualizado correctamente.`;
+      } catch (e) {
+        nniaMsg = 'Ocurrió un error al editar el documento. Por favor, revisa los datos e inténtalo de nuevo.';
+      }
+    }
+    if (nniaMsg && nniaMsg.trim().startsWith('ELIMINAR_DOCUMENTO:')) {
+      try {
+        const delStr = nniaMsg.replace('ELIMINAR_DOCUMENTO:', '').trim();
+        const delData = JSON.parse(delStr);
+        await deleteDocument(delData.id, clientId);
+        nniaMsg = `✅ El documento fue eliminado correctamente.`;
+      } catch (e) {
+        nniaMsg = 'Ocurrió un error al eliminar el documento. Por favor, revisa los datos e inténtalo de nuevo.';
+      }
+    }
+
     // Guardar respuesta final de NNIA en la tabla messages (después de todas las modificaciones)
     console.log('Respuesta de NNIA antes de guardar:', nniaMsg);
     if (nniaMsg) {
@@ -266,7 +309,7 @@ router.post('/respond', async (req: Request, res: Response) => {
 router.post('/analyze-document', async (req: Request, res: Response) => {
   const { clientId, file_url, file_type, prompt } = req.body;
   if (!clientId || !file_url || !file_type || !prompt) {
-    res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    res.status(400).json({ error: 'Faltan datos para analizar el documento. Por favor, intenta de nuevo.' });
     return;
   }
   try {
@@ -301,7 +344,7 @@ router.post('/analyze-document', async (req: Request, res: Response) => {
       });
     }
     if (!extractedText || extractedText.trim().length < 10) {
-      throw new Error('No se pudo extraer texto del archivo o el archivo está vacío.');
+      throw new Error('No se pudo leer el contenido del archivo. Asegúrate de que el documento no esté vacío o dañado.');
     }
     // Limitar el texto a 8000 caracteres para OpenAI (ajustable)
     const limitedText = extractedText.slice(0, 8000);
@@ -311,7 +354,15 @@ router.post('/analyze-document', async (req: Request, res: Response) => {
     ], 'gpt-4o');
     res.json({ result: nniaResponse.message });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    let userError = 'Ocurrió un problema al analizar el documento. Por favor, intenta de nuevo o prueba con otro archivo.';
+    if (error.message && error.message.includes('No se pudo leer el contenido')) {
+      userError = error.message;
+    } else if (error.message && error.message.includes('Request failed with status code 403')) {
+      userError = 'No se pudo acceder al archivo. Verifica que el archivo esté disponible y vuelve a intentarlo.';
+    } else if (error.message && error.message.includes('timeout')) {
+      userError = 'El análisis tardó demasiado. Por favor, intenta con un archivo más pequeño.';
+    }
+    res.status(500).json({ error: userError });
   }
 });
 
