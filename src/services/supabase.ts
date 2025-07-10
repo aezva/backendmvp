@@ -415,3 +415,61 @@ export async function autoArchiveOldTicketsAndLeads() {
   if (ticketError || leadError) throw ticketError || leadError;
   return { tickets: ticketData ? ticketData.length : 0, leads: leadData ? leadData.length : 0 };
 } 
+
+// DOCUMENTOS NNIA
+
+// Crear documento
+export async function createDocument(document: any) {
+  const { data, error } = await supabase
+    .from('documents')
+    .insert([document])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// Obtener todos los documentos de un cliente
+export async function getDocuments(clientId: string) {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+// Obtener documento individual
+export async function getDocumentById(id: string, clientId: string) {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Actualizar documento
+export async function updateDocument(id: string, clientId: string, updates: any) {
+  const { data, error } = await supabase
+    .from('documents')
+    .update(updates)
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .select();
+  if (error) throw error;
+  return data && data[0];
+}
+
+// Eliminar documento
+export async function deleteDocument(id: string, clientId: string) {
+  const { error } = await supabase
+    .from('documents')
+    .delete()
+    .eq('id', id)
+    .eq('client_id', clientId);
+  if (error) throw error;
+  return { success: true };
+} 

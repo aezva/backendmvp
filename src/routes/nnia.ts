@@ -1,7 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { buildPrompt } from '../utils/promptBuilder';
+import axios from 'axios';
 import { askNNIAWithModel } from '../services/openai';
-import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, createTicket, createLead } from '../services/supabase';
+import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, createTicket, createLead, createDocument, getDocuments, getDocumentById, updateDocument, deleteDocument } from '../services/supabase';
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
+import xlsx from 'xlsx';
+import textract from 'textract';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
 
@@ -36,7 +43,7 @@ router.post('/respond', async (req: Request, res: Response) => {
     const businessData = await getPublicBusinessData(clientId);
     // 3. Obtener disponibilidad y tipos de cita
     const availability = await getAvailabilityAndTypes(clientId);
-    
+
     // 3.1. Obtener datos de reservas si están configurados
     let reservationData: { availability: any, types: any[], pendingReservations: any[] } | undefined = undefined;
     try {
@@ -255,12 +262,55 @@ router.post('/respond', async (req: Request, res: Response) => {
   }
 });
 
-// Análisis de documentos (subida y análisis)
+// Analizar documento subido
 router.post('/analyze-document', async (req: Request, res: Response) => {
-  // Aquí se recibiría la URL o el archivo del documento
-  // Se analizaría el documento y se guardaría el resumen en Supabase
-  // Ejemplo de respuesta:
-  res.json({ success: true, summary: 'Resumen del documento (pendiente de integración real)' });
+  const { clientId, file_url, file_type, prompt } = req.body;
+  if (!clientId || !file_url || !file_type || !prompt) {
+    res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    return;
+  }
+  try {
+    // Descargar el archivo temporalmente
+    const response = await axios.get(file_url, { responseType: 'arraybuffer' });
+    const buffer = Buffer.from(response.data);
+    let extractedText = '';
+    if (file_type === 'pdf') {
+      const data = await pdfParse(buffer);
+      extractedText = data.text;
+    } else if (file_type === 'docx' || file_type === 'doc') {
+      const result = await mammoth.extractRawText({ buffer });
+      extractedText = result.value;
+    } else if (file_type === 'txt') {
+      extractedText = buffer.toString('utf-8');
+    } else if (file_type === 'xlsx' || file_type === 'xls') {
+      const workbook = xlsx.read(buffer, { type: 'buffer' });
+      let text = '';
+      workbook.SheetNames.forEach((sheetName) => {
+        const sheet = workbook.Sheets[sheetName];
+        const csv = xlsx.utils.sheet_to_csv(sheet);
+        text += csv + '\n';
+      });
+      extractedText = text;
+    } else {
+      // Fallback: usar textract para otros tipos
+      extractedText = await new Promise((resolve, reject) => {
+        textract.fromBufferWithName('file.' + file_type, buffer, (err, text) => {
+          if (err) reject(err);
+          else resolve(text);
+        });
+      });
+    }
+    if (!extractedText || extractedText.trim().length < 10) {
+      throw new Error('No se pudo extraer texto del archivo o el archivo está vacío.');
+    }
+    // Limitar el texto a 8000 caracteres para OpenAI (ajustable)
+    const limitedText = extractedText.slice(0, 8000);
+    const fullPrompt = `${prompt}\n\nTexto del documento:\n${limitedText}`;
+    const nniaResponse = await askNNIAWithModel(fullPrompt, 'gpt-4o');
+    res.json({ result: nniaResponse.message });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Gestión de citas (crear, actualizar, eliminar)
@@ -402,6 +452,86 @@ router.post('/notifications/:id/read', async (req: Request, res: Response) => {
   try {
     const data = await markNotificationRead(req.params.id);
     res.json({ success: true, notification: data });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DOCUMENTOS NNIA
+
+// Crear documento
+router.post('/documents', async (req: Request, res: Response) => {
+  const { clientId, name, content, file_url, file_type } = req.body;
+  if (!clientId || !name || !content) {
+    res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    return;
+  }
+  try {
+    const doc = await createDocument({ client_id: clientId, name, content, file_url, file_type });
+    res.json(doc);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Listar documentos de un cliente
+router.get('/documents', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const docs = await getDocuments(clientId as string);
+    res.json(docs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener documento individual
+router.get('/documents/:id', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  const { id } = req.params;
+  if (!clientId || !id) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const doc = await getDocumentById(id, clientId as string);
+    res.json(doc);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Actualizar documento
+router.put('/documents/:id', async (req: Request, res: Response) => {
+  const { clientId, name, content } = req.body;
+  const { id } = req.params;
+  if (!clientId || !id) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const doc = await updateDocument(id, clientId, { name, content });
+    res.json(doc);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar documento
+router.delete('/documents/:id', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  const { id } = req.params;
+  if (!clientId || !id) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const result = await deleteDocument(id, clientId as string);
+    res.json(result);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
