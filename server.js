@@ -12,40 +12,40 @@ const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Configuración de planes
+// Configuración de planes (actualizado a modo LIVE)
 const PLANS = {
   starter: {
     name: 'Starter',
-    price: 19,
-    tokens: 150000,
-    priceId: 'price_1RdfNTP1x2coidHcaMps3STo'
+    priceId: 'price_1Rlr8LGmx15fN3tsakY4AVjH',
+    tokens: 20000 // Ajusta el límite real si es diferente
   },
   pro: {
     name: 'Pro',
-    price: 49,
-    tokens: 500000,
-    priceId: 'price_1RdfO7P1x2coidHcPT71SJlt'
+    priceId: 'price_1Rlr97Gmx15fN3tsINg8pjBW',
+    tokens: 50000 // Ajusta el límite real si es diferente
   },
-  ultra: {
-    name: 'Ultra',
-    price: 99,
-    tokens: 1200000,
-    priceId: 'price_1RdfOfP1x2coidHcln5m4KEi'
+  business: {
+    name: 'Business',
+    priceId: 'price_1Rlr9iGmx15fN3tsXAwk7jPS',
+    tokens: 150000 // Ajusta el límite real si es diferente
   }
 };
 
 const TOKEN_PACKS = {
-  pack1: {
-    name: '150K Tokens',
-    price: 5,
-    tokens: 150000,
-    priceId: 'price_1RdfS0P1x2coidHcafwMvRba'
+  pack_20k: {
+    name: '20,000 tokens',
+    priceId: 'price_1RlrFDGmx15fN3tsGT1dKoI0',
+    tokens: 20000
   },
-  pack2: {
-    name: '400K Tokens',
-    price: 10,
-    tokens: 400000,
-    priceId: 'price_1RdfT4P1x2coidHcbpqY6Wjh'
+  pack_50k: {
+    name: '50,000 tokens',
+    priceId: 'price_1RlrFjGmx15fN3tsRiGEGlfd',
+    tokens: 50000
+  },
+  pack_150k: {
+    name: '150,000 tokens',
+    priceId: 'price_1RlrHmGmx15fN3tsT4S0pKse',
+    tokens: 150000
   }
 };
 
@@ -202,6 +202,115 @@ app.get('/api/payment-history', async (req, res) => {
   } catch (error) {
     console.error('Error fetching payment history:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Endpoint para recibir webhooks de Stripe
+app.post('/api/stripe/webhook', bodyParser.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  let event;
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+
+  // Procesar los eventos relevantes
+  try {
+    switch (event.type) {
+      case 'checkout.session.completed': {
+        const session = event.data.object;
+        const clientId = session.metadata?.client_id;
+        const mode = session.metadata?.mode;
+        // Si es suscripción
+        if (mode === 'subscription' && session.subscription) {
+          // Obtener la suscripción de Stripe
+          const subscription = await stripe.subscriptions.retrieve(session.subscription);
+          // Determinar el plan
+          const plan = Object.values(PLANS).find(p => p.priceId === subscription.items.data[0].price.id);
+          // Actualizar la suscripción en Supabase
+          await supabase.from('subscriptions').upsert({
+            client_id: clientId,
+            plan: plan ? plan.name : 'Starter',
+            status: subscription.status,
+            tokens_remaining: plan ? plan.tokens : 20000,
+            stripe_subscription_id: subscription.id,
+            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            updated_at: new Date().toISOString()
+          }, { onConflict: ['client_id'] });
+        }
+        // Si es compra de paquete de tokens
+        if (mode === 'payment') {
+          const pack = Object.values(TOKEN_PACKS).find(p => p.priceId === session.display_items?.[0]?.price?.id || session.line_items?.[0]?.price?.id || session.metadata?.priceId);
+          if (clientId && pack) {
+            // Sumar tokens comprados
+            await supabase.rpc('add_tokens_to_client', {
+              p_client_id: clientId,
+              p_tokens: pack.tokens
+            });
+            // Registrar la compra
+            await supabase.from('token_purchases').insert({
+              client_id: clientId,
+              tokens_amount: pack.tokens,
+              price_paid: session.amount_total ? session.amount_total / 100 : null,
+              stripe_payment_intent_id: session.payment_intent,
+              status: 'completed',
+              created_at: new Date().toISOString()
+            });
+          }
+        }
+        break;
+      }
+      case 'invoice.paid': {
+        // Renovación de suscripción pagada
+        const invoice = event.data.object;
+        const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+        const clientId = subscription.metadata?.client_id;
+        const plan = Object.values(PLANS).find(p => p.priceId === subscription.items.data[0].price.id);
+        if (clientId && plan) {
+          // Reiniciar tokens y actualizar fechas
+          await supabase.from('subscriptions').update({
+            tokens_remaining: plan.tokens,
+            tokens_used_this_month: 0,
+            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            status: subscription.status,
+            updated_at: new Date().toISOString()
+          }).eq('client_id', clientId);
+        }
+        break;
+      }
+      case 'customer.subscription.updated': {
+        // Cambio de plan o estado
+        const subscription = event.data.object;
+        const clientId = subscription.metadata?.client_id;
+        const plan = Object.values(PLANS).find(p => p.priceId === subscription.items.data[0].price.id);
+        if (clientId && plan) {
+          await supabase.from('subscriptions').update({
+            plan: plan.name,
+            tokens_remaining: plan.tokens,
+            status: subscription.status,
+            current_period_start: new Date(subscription.current_period_start * 1000).toISOString(),
+            current_period_end: new Date(subscription.current_period_end * 1000).toISOString(),
+            updated_at: new Date().toISOString()
+          }).eq('client_id', clientId);
+        }
+        break;
+      }
+      case 'payment_intent.succeeded': {
+        // Puedes manejar pagos únicos aquí si lo necesitas
+        break;
+      }
+      default:
+        // Otros eventos pueden ser registrados para debug
+        console.log(`Unhandled event type: ${event.type}`);
+    }
+    res.json({ received: true });
+  } catch (err) {
+    console.error('Error processing Stripe webhook:', err);
+    res.status(500).send('Webhook handler failed');
   }
 });
 

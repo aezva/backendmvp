@@ -418,7 +418,7 @@ export async function autoArchiveOldTicketsAndLeads() {
 
 // DOCUMENTOS NNIA
 
-// Crear documento
+// Crear documento (ahora soporta folder_id)
 export async function createDocument(document: any) {
   const { data, error } = await supabase
     .from('documents')
@@ -428,15 +428,33 @@ export async function createDocument(document: any) {
   return data[0];
 }
 
-// Obtener todos los documentos de un cliente
-export async function getDocuments(clientId: string) {
-  const { data, error } = await supabase
+// Listar documentos de un cliente (solo raíz si folder_id es null)
+export async function getDocuments(clientId: string, folderId?: string) {
+  let query = supabase
     .from('documents')
     .select('*')
     .eq('client_id', clientId)
     .order('created_at', { ascending: false });
+  if (typeof folderId !== 'undefined') {
+    query = query.eq('folder_id', folderId);
+  } else {
+    query = query.is('folder_id', null);
+  }
+  const { data, error } = await query;
   if (error) throw error;
   return data;
+}
+
+// Mover documento a otra carpeta
+export async function moveDocumentToFolder(documentId: string, clientId: string, folderId: string | null) {
+  const { data, error } = await supabase
+    .from('documents')
+    .update({ folder_id: folderId })
+    .eq('id', documentId)
+    .eq('client_id', clientId)
+    .select();
+  if (error) throw error;
+  return data && data[0];
 }
 
 // Obtener documento individual
@@ -472,4 +490,69 @@ export async function deleteDocument(id: string, clientId: string) {
     .eq('client_id', clientId);
   if (error) throw error;
   return { success: true };
+} 
+
+// ===== FUNCIONES PARA CARPETAS =====
+
+// Crear carpeta
+export async function createFolder(folder: any) {
+  const { data, error } = await supabase
+    .from('folders')
+    .insert([folder])
+    .select();
+  if (error) throw error;
+  return data[0];
+}
+
+// Listar carpetas de un cliente
+export async function getFolders(clientId: string) {
+  const { data, error } = await supabase
+    .from('folders')
+    .select('*')
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
+}
+
+// Eliminar carpeta (y poner folder_id a null en documentos de esa carpeta)
+export async function deleteFolder(id: string, clientId: string) {
+  // Primero, poner folder_id a null en documentos de esa carpeta
+  await supabase
+    .from('documents')
+    .update({ folder_id: null })
+    .eq('folder_id', id)
+    .eq('client_id', clientId);
+  // Luego, eliminar la carpeta
+  const { error } = await supabase
+    .from('folders')
+    .delete()
+    .eq('id', id)
+    .eq('client_id', clientId);
+  if (error) throw error;
+  return { success: true };
+}
+
+// Renombrar carpeta
+export async function renameFolder(id: string, clientId: string, name: string) {
+  const { data, error } = await supabase
+    .from('folders')
+    .update({ name })
+    .eq('id', id)
+    .eq('client_id', clientId)
+    .select();
+  if (error) throw error;
+  return data && data[0];
+}
+
+// Listar documentos de una carpeta
+export async function getDocumentsByFolder(folderId: string, clientId: string) {
+  const { data, error } = await supabase
+    .from('documents')
+    .select('*')
+    .eq('folder_id', folderId)
+    .eq('client_id', clientId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return data;
 } 

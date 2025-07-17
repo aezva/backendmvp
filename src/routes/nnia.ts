@@ -2,13 +2,14 @@ import { Router, Request, Response } from 'express';
 import { buildPrompt } from '../utils/promptBuilder';
 import axios from 'axios';
 import { askNNIAWithModel } from '../services/openai';
-import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, createTicket, createLead, createDocument, getDocuments, getDocumentById, updateDocument, deleteDocument } from '../services/supabase';
+import { getClientData, getPublicBusinessData, getAppointments, createAppointment, getAvailability, setAvailability, getAvailabilityAndTypes, updateAppointment, deleteAppointment, getNotifications, createNotification, markNotificationRead, createTicket, createLead, createDocument, getDocuments, getDocumentById, updateDocument, deleteDocument, moveDocumentToFolder } from '../services/supabase';
 import pdfParse from 'pdf-parse';
 import mammoth from 'mammoth';
 import xlsx from 'xlsx';
 import textract from 'textract';
 import fs from 'fs';
 import path from 'path';
+import { createFolder, getFolders, deleteFolder, renameFolder, getDocumentsByFolder } from '../services/supabase';
 
 const router = Router();
 
@@ -512,31 +513,47 @@ router.post('/notifications/:id/read', async (req: Request, res: Response) => {
 
 // DOCUMENTOS NNIA
 
-// Crear documento
+// Crear documento (ahora soporta folder_id)
 router.post('/documents', async (req: Request, res: Response) => {
-  const { clientId, name, content, file_url, file_type } = req.body;
+  const { clientId, name, content, file_url, file_type, folder_id } = req.body;
   if (!clientId || !name || !content) {
     res.status(400).json({ error: 'Faltan parámetros requeridos.' });
     return;
   }
   try {
-    const doc = await createDocument({ client_id: clientId, name, content, file_url, file_type });
+    const doc = await createDocument({ client_id: clientId, name, content, file_url, file_type, folder_id });
     res.json(doc);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
-// Listar documentos de un cliente
+// Listar documentos de un cliente (por folder_id o raíz)
 router.get('/documents', async (req: Request, res: Response) => {
-  const { clientId } = req.query;
+  const { clientId, folderId } = req.query;
   if (!clientId) {
     res.status(400).json({ error: 'Falta clientId' });
     return;
   }
   try {
-    const docs = await getDocuments(clientId as string);
+    const docs = await getDocuments(clientId as string, folderId as string | undefined);
     res.json(docs);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Mover documento a otra carpeta
+router.put('/documents/:id/move', async (req: Request, res: Response) => {
+  const { clientId, folderId } = req.body;
+  const { id } = req.params;
+  if (!clientId || !id) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const doc = await moveDocumentToFolder(id, clientId, typeof folderId === 'undefined' ? null : folderId);
+    res.json(doc);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -585,6 +602,86 @@ router.delete('/documents/:id', async (req: Request, res: Response) => {
   try {
     const result = await deleteDocument(id, clientId as string);
     res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ===== ENDPOINTS PARA CARPETAS =====
+
+// Crear carpeta
+router.post('/folders', async (req: Request, res: Response) => {
+  const { clientId, name } = req.body;
+  if (!clientId || !name) {
+    res.status(400).json({ error: 'Faltan parámetros requeridos.' });
+    return;
+  }
+  try {
+    const folder = await createFolder({ client_id: clientId, name });
+    res.json(folder);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Listar carpetas de un cliente
+router.get('/folders', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  if (!clientId) {
+    res.status(400).json({ error: 'Falta clientId' });
+    return;
+  }
+  try {
+    const folders = await getFolders(clientId as string);
+    res.json(folders);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Eliminar carpeta
+router.delete('/folders/:id', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  const { id } = req.params;
+  if (!clientId || !id) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const result = await deleteFolder(id, clientId as string);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Renombrar carpeta
+router.put('/folders/:id', async (req: Request, res: Response) => {
+  const { clientId, name } = req.body;
+  const { id } = req.params;
+  if (!clientId || !id || !name) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const folder = await renameFolder(id, clientId, name);
+    res.json(folder);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Listar documentos de una carpeta
+router.get('/folders/:id/documents', async (req: Request, res: Response) => {
+  const { clientId } = req.query;
+  const { id } = req.params;
+  if (!clientId || !id) {
+    res.status(400).json({ error: 'Faltan parámetros' });
+    return;
+  }
+  try {
+    const docs = await getDocumentsByFolder(id, clientId as string);
+    res.json(docs);
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
