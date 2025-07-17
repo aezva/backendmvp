@@ -4,7 +4,7 @@ import { TokenService } from '../services/tokenService';
 const router = Router();
 
 // GET /nnia/tokens/usage/:clientId
-router.get('/usage/:clientId', async (req: Request, res: Response) => {
+router.get('/usage/:clientId', async (req, res) => {
   const { clientId } = req.params;
   const { monthYear } = req.query;
 
@@ -25,7 +25,7 @@ router.get('/usage/:clientId', async (req: Request, res: Response) => {
 });
 
 // GET /nnia/tokens/summary/:clientId
-router.get('/summary/:clientId', async (req: Request, res: Response) => {
+router.get('/summary/:clientId', async (req, res) => {
   const { clientId } = req.params;
 
   if (!clientId) {
@@ -45,7 +45,7 @@ router.get('/summary/:clientId', async (req: Request, res: Response) => {
 });
 
 // POST /nnia/tokens/check
-router.post('/check', async (req: Request, res: Response) => {
+router.post('/check', async (req, res) => {
   const { clientId, estimatedTokens } = req.body;
 
   if (!clientId || !estimatedTokens) {
@@ -65,7 +65,7 @@ router.post('/check', async (req: Request, res: Response) => {
 });
 
 // POST /nnia/tokens/consume
-router.post('/consume', async (req: Request, res: Response) => {
+router.post('/consume', async (req, res) => {
   const {
     clientId, 
     tokensToConsume, 
@@ -106,7 +106,7 @@ router.post('/consume', async (req: Request, res: Response) => {
 });
 
 // POST /nnia/tokens/estimate
-router.post('/estimate', async (req: Request, res: Response) => {
+router.post('/estimate', async (req, res) => {
   const { messageLength } = req.body;
 
   if (!messageLength) {
@@ -123,7 +123,7 @@ router.post('/estimate', async (req: Request, res: Response) => {
 });
 
 // GET /nnia/tokens/limits/:plan
-router.get('/limits/:plan', async (req: Request, res: Response) => {
+router.get('/limits/:plan', async (req, res) => {
   const { plan } = req.params;
 
   if (!plan) {

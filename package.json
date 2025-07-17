@@ -5,7 +5,6 @@
   "main": "server.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
-    "prebuild": "chmod +x ./node_modules/.bin/tsc",
     "build": "tsc",
     "start": "node dist/server.js"
   },
