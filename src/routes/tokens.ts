@@ -1,5 +1,5 @@
-import { Router, Request, Response } fromexpress';
-import { TokenService } from ../services/tokenService;
+import { Router, Request, Response } from 'express';
+import { TokenService } from '../services/tokenService';
 
 const router = Router();
 
