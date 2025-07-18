@@ -7,6 +7,7 @@ const supabaseKey = process.env.SUPABASE_SERVICE_KEY || '';
 console.log('DEBUG SUPABASE_URL:', supabaseUrl);
 console.log('DEBUG SUPABASE_SERVICE_KEY:', supabaseKey ? '[PRESENTE]' : '[VACÍA]');
 console.log('DEBUG SUPABASE_SERVICE_KEY length:', supabaseKey.length);
+console.log('DEBUG SUPABASE_SERVICE_KEY starts with:', supabaseKey.substring(0, 10) + '...');
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
