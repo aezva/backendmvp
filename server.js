@@ -104,7 +104,8 @@ app.post('/api/create-checkout-session', async (req, res) => {
       metadata: {
         client_id: clientId,
         mode: mode
-      }
+      },
+      allow_promotion_codes: true // <--- Permitir cupones de descuento
     });
 
     res.json({ sessionId: session.id });
