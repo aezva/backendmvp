@@ -175,7 +175,7 @@ router.post('/respond', async (req, res) => {
             ticketCreado = await (0, supabase_1.createTicket)({
                 client_id: clientId,
                 visitor_id: visitorId,
-                visitor_name: null, // Se puede extraer si se implementa lógica adicional
+                visitor_name: null,
                 status: 'open',
                 message: message,
                 created_at: new Date().toISOString()
@@ -198,7 +198,7 @@ router.post('/respond', async (req, res) => {
             leadCreado = await (0, supabase_1.createLead)({
                 client_id: clientId,
                 visitor_id: visitorId,
-                visitor_name: null, // Se puede extraer si se implementa lógica adicional
+                visitor_name: null,
                 visitor_email: emailMatch,
                 visitor_phone: phoneMatch,
                 source: source,

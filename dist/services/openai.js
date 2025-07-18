@@ -3,8 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.askNNIAWithModel = askNNIAWithModel;
-exports.askNNIAWithAssistantAPI = askNNIAWithAssistantAPI;
+exports.askNNIAWithAssistantAPI = exports.askNNIAWithModel = void 0;
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
 const openai_1 = __importDefault(require("openai"));
@@ -25,6 +24,7 @@ async function askNNIAWithModel(messages, model = 'gpt-4o') {
         allMessages: completion.choices,
     };
 }
+exports.askNNIAWithModel = askNNIAWithModel;
 async function askNNIAWithAssistantAPI(messages, threadId) {
     // 1. Si no hay thread, crear uno nuevo
     let thread = threadId;
@@ -70,3 +70,4 @@ async function askNNIAWithAssistantAPI(messages, threadId) {
         allMessages: messagesFinales.data,
     };
 }
+exports.askNNIAWithAssistantAPI = askNNIAWithAssistantAPI;

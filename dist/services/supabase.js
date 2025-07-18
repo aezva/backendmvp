@@ -3,44 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.supabase = void 0;
-exports.getClientData = getClientData;
-exports.getPublicBusinessData = getPublicBusinessData;
-exports.getAppointments = getAppointments;
-exports.createNotification = createNotification;
-exports.createAppointment = createAppointment;
-exports.getAvailability = getAvailability;
-exports.setAvailability = setAvailability;
-exports.getAvailabilityAndTypes = getAvailabilityAndTypes;
-exports.updateAppointment = updateAppointment;
-exports.deleteAppointment = deleteAppointment;
-exports.getNotifications = getNotifications;
-exports.markNotificationRead = markNotificationRead;
-exports.getReservations = getReservations;
-exports.createReservation = createReservation;
-exports.getReservationTypes = getReservationTypes;
-exports.createReservationType = createReservationType;
-exports.updateReservationType = updateReservationType;
-exports.deleteReservationType = deleteReservationType;
-exports.getReservationAvailability = getReservationAvailability;
-exports.setReservationAvailability = setReservationAvailability;
-exports.updateReservation = updateReservation;
-exports.deleteReservation = deleteReservation;
-exports.getReservationAvailabilityAndTypes = getReservationAvailabilityAndTypes;
-exports.createTicket = createTicket;
-exports.createLead = createLead;
-exports.autoArchiveOldTicketsAndLeads = autoArchiveOldTicketsAndLeads;
-exports.createDocument = createDocument;
-exports.getDocuments = getDocuments;
-exports.moveDocumentToFolder = moveDocumentToFolder;
-exports.getDocumentById = getDocumentById;
-exports.updateDocument = updateDocument;
-exports.deleteDocument = deleteDocument;
-exports.createFolder = createFolder;
-exports.getFolders = getFolders;
-exports.deleteFolder = deleteFolder;
-exports.renameFolder = renameFolder;
-exports.getDocumentsByFolder = getDocumentsByFolder;
+exports.getDocumentsByFolder = exports.renameFolder = exports.deleteFolder = exports.getFolders = exports.createFolder = exports.deleteDocument = exports.updateDocument = exports.getDocumentById = exports.moveDocumentToFolder = exports.getDocuments = exports.createDocument = exports.autoArchiveOldTicketsAndLeads = exports.createLead = exports.createTicket = exports.getReservationAvailabilityAndTypes = exports.deleteReservation = exports.updateReservation = exports.setReservationAvailability = exports.getReservationAvailability = exports.deleteReservationType = exports.updateReservationType = exports.createReservationType = exports.getReservationTypes = exports.createReservation = exports.getReservations = exports.markNotificationRead = exports.getNotifications = exports.deleteAppointment = exports.updateAppointment = exports.getAvailabilityAndTypes = exports.setAvailability = exports.getAvailability = exports.createAppointment = exports.createNotification = exports.getAppointments = exports.getPublicBusinessData = exports.getClientData = exports.supabase = void 0;
 const supabase_js_1 = require("@supabase/supabase-js");
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
@@ -60,6 +23,7 @@ async function getClientData(clientId) {
         throw error;
     return data;
 }
+exports.getClientData = getClientData;
 async function getPublicBusinessData(clientId) {
     // Obtener business_name desde clients
     const { data: client, error: clientError } = await exports.supabase
@@ -86,6 +50,7 @@ async function getPublicBusinessData(clientId) {
     const cleanData = Object.fromEntries(Object.entries(combined).filter(([_, value]) => value !== null && value !== undefined && value !== ''));
     return cleanData;
 }
+exports.getPublicBusinessData = getPublicBusinessData;
 // Obtener citas de un cliente
 async function getAppointments(clientId) {
     const { data, error } = await exports.supabase
@@ -98,6 +63,7 @@ async function getAppointments(clientId) {
         throw error;
     return data;
 }
+exports.getAppointments = getAppointments;
 // Helper para limpiar notificación antes de insertar
 function cleanNotificationInput(notification) {
     const { id, read, created_at, ...rest } = notification;
@@ -117,6 +83,7 @@ async function createNotification(notification) {
         throw error;
     return data[0];
 }
+exports.createNotification = createNotification;
 // Helper para obtener el id de business_info a partir de client_id
 async function getBusinessInfoIdByClientId(clientId) {
     const { data, error } = await exports.supabase
@@ -157,6 +124,7 @@ async function createAppointment(appointment) {
     }
     return cita;
 }
+exports.createAppointment = createAppointment;
 // Obtener disponibilidad de un cliente
 async function getAvailability(clientId) {
     const { data, error } = await exports.supabase
@@ -173,6 +141,7 @@ async function getAvailability(clientId) {
         types: data.appointment_types ? data.appointment_types.split(',') : []
     } : { days: [], hours: '', types: [] };
 }
+exports.getAvailability = getAvailability;
 // Guardar o actualizar disponibilidad
 async function setAvailability(clientId, availability) {
     const { data, error } = await exports.supabase
@@ -192,6 +161,7 @@ async function setAvailability(clientId, availability) {
         types: data[0].appointment_types ? data[0].appointment_types.split(',') : []
     } : { days: [], hours: '', types: [] };
 }
+exports.setAvailability = setAvailability;
 // Obtener disponibilidad y tipos de cita de un cliente (helper para NNIA)
 async function getAvailabilityAndTypes(clientId) {
     const { data, error } = await exports.supabase
@@ -207,6 +177,7 @@ async function getAvailabilityAndTypes(clientId) {
         types: data.appointment_types ? data.appointment_types.split(',') : []
     } : { days: [], hours: '', types: [] };
 }
+exports.getAvailabilityAndTypes = getAvailabilityAndTypes;
 // Actualizar una cita
 async function updateAppointment(id, updates) {
     const { data, error } = await exports.supabase
@@ -218,6 +189,7 @@ async function updateAppointment(id, updates) {
         throw error;
     return data && data[0];
 }
+exports.updateAppointment = updateAppointment;
 // Eliminar una cita
 async function deleteAppointment(id) {
     const { error } = await exports.supabase
@@ -228,6 +200,7 @@ async function deleteAppointment(id) {
         throw error;
     return { success: true };
 }
+exports.deleteAppointment = deleteAppointment;
 // Obtener notificaciones de un cliente
 async function getNotifications(clientId) {
     const { data, error } = await exports.supabase
@@ -239,6 +212,7 @@ async function getNotifications(clientId) {
         throw error;
     return data;
 }
+exports.getNotifications = getNotifications;
 // Marcar notificación como leída
 async function markNotificationRead(id) {
     const { data, error } = await exports.supabase
@@ -250,6 +224,7 @@ async function markNotificationRead(id) {
         throw error;
     return data[0];
 }
+exports.markNotificationRead = markNotificationRead;
 // ===== FUNCIONES PARA RESERVAS =====
 // Obtener reservas de un cliente
 async function getReservations(clientId) {
@@ -263,6 +238,7 @@ async function getReservations(clientId) {
         throw error;
     return data;
 }
+exports.getReservations = getReservations;
 // Crear una reserva
 async function createReservation(reservation) {
     // Forzar status 'pending' si no viene definido
@@ -292,6 +268,7 @@ async function createReservation(reservation) {
     }
     return reserva;
 }
+exports.createReservation = createReservation;
 // Obtener tipos de reserva de un cliente
 async function getReservationTypes(clientId) {
     const { data, error } = await exports.supabase
@@ -304,6 +281,7 @@ async function getReservationTypes(clientId) {
         throw error;
     return data;
 }
+exports.getReservationTypes = getReservationTypes;
 // Crear tipo de reserva
 async function createReservationType(reservationType) {
     const { data, error } = await exports.supabase
@@ -314,6 +292,7 @@ async function createReservationType(reservationType) {
         throw error;
     return data[0];
 }
+exports.createReservationType = createReservationType;
 // Actualizar tipo de reserva
 async function updateReservationType(id, updates) {
     const { data, error } = await exports.supabase
@@ -325,6 +304,7 @@ async function updateReservationType(id, updates) {
         throw error;
     return data && data[0];
 }
+exports.updateReservationType = updateReservationType;
 // Eliminar tipo de reserva (desactivar)
 async function deleteReservationType(id) {
     const { data, error } = await exports.supabase
@@ -336,6 +316,7 @@ async function deleteReservationType(id) {
         throw error;
     return data && data[0];
 }
+exports.deleteReservationType = deleteReservationType;
 // Obtener disponibilidad de reservas de un cliente
 async function getReservationAvailability(clientId) {
     const { data, error } = await exports.supabase
@@ -351,6 +332,7 @@ async function getReservationAvailability(clientId) {
         advance_booking_days: data.advance_booking_days || 30
     } : { days: [], hours: '', advance_booking_days: 30 };
 }
+exports.getReservationAvailability = getReservationAvailability;
 // Guardar o actualizar disponibilidad de reservas
 async function setReservationAvailability(clientId, availability) {
     const { data, error } = await exports.supabase
@@ -370,6 +352,7 @@ async function setReservationAvailability(clientId, availability) {
         advance_booking_days: data[0].advance_booking_days || 30
     } : { days: [], hours: '', advance_booking_days: 30 };
 }
+exports.setReservationAvailability = setReservationAvailability;
 // Actualizar una reserva
 async function updateReservation(id, updates) {
     const { data, error } = await exports.supabase
@@ -381,6 +364,7 @@ async function updateReservation(id, updates) {
         throw error;
     return data && data[0];
 }
+exports.updateReservation = updateReservation;
 // Eliminar una reserva
 async function deleteReservation(id) {
     const { error } = await exports.supabase
@@ -391,6 +375,7 @@ async function deleteReservation(id) {
         throw error;
     return { success: true };
 }
+exports.deleteReservation = deleteReservation;
 // Obtener disponibilidad y tipos de reserva de un cliente (helper para NNIA)
 async function getReservationAvailabilityAndTypes(clientId) {
     const [availability, types] = await Promise.all([
@@ -402,6 +387,7 @@ async function getReservationAvailabilityAndTypes(clientId) {
         types: types || []
     };
 }
+exports.getReservationAvailabilityAndTypes = getReservationAvailabilityAndTypes;
 // Crear ticket
 async function createTicket(ticketData) {
     const { data, error } = await exports.supabase
@@ -412,6 +398,7 @@ async function createTicket(ticketData) {
         throw error;
     return data[0];
 }
+exports.createTicket = createTicket;
 // Crear lead
 async function createLead(leadData) {
     const { data, error } = await exports.supabase
@@ -422,6 +409,7 @@ async function createLead(leadData) {
         throw error;
     return data[0];
 }
+exports.createLead = createLead;
 /**
  * Archiva automáticamente tickets y leads con más de 7 días de antigüedad y estado distinto de 'archived'.
  * Retorna el número de elementos archivados por tipo.
@@ -446,6 +434,7 @@ async function autoArchiveOldTicketsAndLeads() {
         throw ticketError || leadError;
     return { tickets: ticketData ? ticketData.length : 0, leads: leadData ? leadData.length : 0 };
 }
+exports.autoArchiveOldTicketsAndLeads = autoArchiveOldTicketsAndLeads;
 // DOCUMENTOS NNIA
 // Crear documento (ahora soporta folder_id)
 async function createDocument(document) {
@@ -457,6 +446,7 @@ async function createDocument(document) {
         throw error;
     return data[0];
 }
+exports.createDocument = createDocument;
 // Listar documentos de un cliente (solo raíz si folder_id es null)
 async function getDocuments(clientId, folderId) {
     let query = exports.supabase
@@ -475,6 +465,7 @@ async function getDocuments(clientId, folderId) {
         throw error;
     return data;
 }
+exports.getDocuments = getDocuments;
 // Mover documento a otra carpeta
 async function moveDocumentToFolder(documentId, clientId, folderId) {
     const { data, error } = await exports.supabase
@@ -487,6 +478,7 @@ async function moveDocumentToFolder(documentId, clientId, folderId) {
         throw error;
     return data && data[0];
 }
+exports.moveDocumentToFolder = moveDocumentToFolder;
 // Obtener documento individual
 async function getDocumentById(id, clientId) {
     const { data, error } = await exports.supabase
@@ -499,6 +491,7 @@ async function getDocumentById(id, clientId) {
         throw error;
     return data;
 }
+exports.getDocumentById = getDocumentById;
 // Actualizar documento
 async function updateDocument(id, clientId, updates) {
     const { data, error } = await exports.supabase
@@ -511,6 +504,7 @@ async function updateDocument(id, clientId, updates) {
         throw error;
     return data && data[0];
 }
+exports.updateDocument = updateDocument;
 // Eliminar documento
 async function deleteDocument(id, clientId) {
     const { error } = await exports.supabase
@@ -522,6 +516,7 @@ async function deleteDocument(id, clientId) {
         throw error;
     return { success: true };
 }
+exports.deleteDocument = deleteDocument;
 // ===== FUNCIONES PARA CARPETAS =====
 // Crear carpeta
 async function createFolder(folder) {
@@ -533,6 +528,7 @@ async function createFolder(folder) {
         throw error;
     return data[0];
 }
+exports.createFolder = createFolder;
 // Listar carpetas de un cliente
 async function getFolders(clientId) {
     const { data, error } = await exports.supabase
@@ -544,6 +540,7 @@ async function getFolders(clientId) {
         throw error;
     return data;
 }
+exports.getFolders = getFolders;
 // Eliminar carpeta (y poner folder_id a null en documentos de esa carpeta)
 async function deleteFolder(id, clientId) {
     // Primero, poner folder_id a null en documentos de esa carpeta
@@ -562,6 +559,7 @@ async function deleteFolder(id, clientId) {
         throw error;
     return { success: true };
 }
+exports.deleteFolder = deleteFolder;
 // Renombrar carpeta
 async function renameFolder(id, clientId, name) {
     const { data, error } = await exports.supabase
@@ -574,6 +572,7 @@ async function renameFolder(id, clientId, name) {
         throw error;
     return data && data[0];
 }
+exports.renameFolder = renameFolder;
 // Listar documentos de una carpeta
 async function getDocumentsByFolder(folderId, clientId) {
     const { data, error } = await exports.supabase
@@ -586,3 +585,4 @@ async function getDocumentsByFolder(folderId, clientId) {
         throw error;
     return data;
 }
+exports.getDocumentsByFolder = getDocumentsByFolder;

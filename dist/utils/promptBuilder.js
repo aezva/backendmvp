@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.buildPrompt = buildPrompt;
+exports.buildPrompt = void 0;
 function buildPrompt({ businessData, message, source, availability, pendingAppointments, reservationData, userName }) {
     // Obtener la fecha actual en formato largo en español
     const fechaActual = new Date().toLocaleDateString('es-ES', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -100,3 +100,4 @@ Si el usuario pide ayuda, soporte, hablar con un responsable, administrador, age
         },
     ];
 }
+exports.buildPrompt = buildPrompt;
