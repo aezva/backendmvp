@@ -5,7 +5,8 @@
   "main": "server.js",
   "scripts": {
     "dev": "ts-node src/server.ts",
-    "build": "npx tsc",
+    "prebuild": "chmod +x ./node_modules/.bin/tsc",
+    "build": "tsc",
     "start": "node dist/server.js"
   },
   "dependencies": {
