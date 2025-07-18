@@ -21,7 +21,7 @@
     "pdf-parse": "^1.1.1",
     "stripe": "^14.7.0",
     "textract": "^2.5.0",
-    "typescript": "^5.8.3",
+    "typescript": "5.2.2",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
