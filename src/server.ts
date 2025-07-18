@@ -12,7 +12,7 @@ const PORT = process.env.PORT || 3001;
 
 // Configuración de Supabase
 const supabaseUrl = process.env.SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY!;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Configuración de planes (actualizado a modo LIVE)
