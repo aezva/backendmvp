@@ -1,12 +1,13 @@
 import { createClient } from '@supabase/supabase-js';
-import dotenv from 'dotenv';
-dotenv.config();
 
-console.log('DEBUG SUPABASE_URL:', process.env.SUPABASE_URL);
-console.log('DEBUG SUPABASE_SERVICE_KEY:', process.env.SUPABASE_SERVICE_KEY ? '[PRESENTE]' : '[VACÍA]');
-
+// Crear el cliente aquí para evitar dependencias circulares
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const supabaseKey = process.env.SUPABASE_SERVICE_KEY || '';
+
+console.log('DEBUG SUPABASE_URL:', supabaseUrl);
+console.log('DEBUG SUPABASE_SERVICE_KEY:', supabaseKey ? '[PRESENTE]' : '[VACÍA]');
+console.log('DEBUG SUPABASE_SERVICE_KEY length:', supabaseKey.length);
+
 export const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function getClientData(clientId: string) {
