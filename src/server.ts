@@ -52,7 +52,14 @@ const TOKEN_PACKS = {
   }
 };
 
-app.use(cors());
+// Configuración CORS específica para el frontend
+app.use(cors({
+  origin: ['https://app.iamnnia.com', 'http://localhost:5173'],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'stripe-signature']
+}));
+
 app.use(bodyParser.json());
 
 // Endpoint para crear sesión de checkout
